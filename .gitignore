@@ -1,0 +1,17 @@
+*.bin
+*.BIN
+*.prg
+*.PRG
+*.list
+*.o
+*.exe
+*.hex
+*.img
+*.zip
+.~*
+font.txt
+normx.txt
+normy.txt
+imgui.ini
+/tools/
+/archive/

@@ -1,0 +1,90 @@
+{
+    "editor.tokenColorCustomizations": {
+        "[*Light*]": {
+            "textMateRules": [
+                {
+                    "scope": "ref.matchtext",
+                    "settings": {
+                        "foreground": "#000"
+                    }
+                },
+                {
+                    "scope": "entity.name.function",
+                    "settings": {
+                        "foreground": "#007700" // Dark green for function names
+                    }
+                },
+                {
+                    "scope": "keyword.control",
+                    "settings": {
+                        "foreground": "#0000FF" // Blue for control keywords
+                    }
+                },
+                {
+                    "scope": "variable.parameter",
+                    "settings": {
+                        "foreground": "#FF00FF" // Magenta for parameters
+                    }
+                },
+                {
+                    "scope": "variable.name",
+                    "settings": {
+                        "foreground": "#500474"
+                    }
+                },
+                {
+                    "scope": "comment",
+                    "settings": {
+                        "foreground": "#008000" // Dark green for comments in light themes
+                    }
+                }
+            ]
+        },
+        "[*Dark*]": {
+            "textMateRules": [
+                {
+                    "scope": "ref.matchtext",
+                    "settings": {
+                        "foreground": "#fff"
+                    }
+                },
+                {
+                    "scope": "entity.name.function",
+                    "settings": {
+                        "foreground": "#00FF00" // Bright green for function names
+                    }
+                },
+                {
+                    "scope": "keyword.control",
+                    "settings": {
+                        "foreground": "#00FFFF" // Cyan for control keywords
+                    }
+                },
+                {
+                    "scope": "variable.parameter",
+                    "settings": {
+                        "foreground": "#FF00FF" // Magenta for parameters
+                    }
+                },
+                {
+                    "scope": "variable.name",
+                    "settings": {
+                        "foreground": "#8d3fd6"
+                    }
+                },
+                {
+                    "scope": "support.function",
+                    "settings": {
+                        "foreground": "#d66a3f"
+                    }
+                },
+                {
+                    "scope": "comment",
+                    "settings": {
+                        "foreground": "#008000" // Bright green for comments in dark themes
+                    }
+                }
+            ]
+        }
+    }
+}
