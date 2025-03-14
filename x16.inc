@@ -1,6 +1,6 @@
 ;////////////////////////////////////////////////////////////
 ;//
-;// X16 addresses, values, and macros
+;// X16 addresses, values, and constants
 ;//
 ;////////////////////////////////////////////////////////////
 .ifndef X16_INC
@@ -66,10 +66,7 @@ r15L              = r15
 r15H              = r15+1
 
 ; Zero-Page userspace
-ZP_PTR_1          = $7E   
-ZP_PTR_2          = $22
-ZP_PTR_3          = $24
-ZP_PTR_4          = $26
+ZP_PTR_1          = $30
 
 ; I/O Registers
 VERA_addr_low     = $9F20
@@ -249,30 +246,5 @@ FETVec         := $03AF
 
 
 
-; Macros
-
-.macro VERA_SET_ADDR addr, stride
-   .ifnblank stride
-      .if stride < 0
-         lda #((^addr) | $08 | ((0-stride) << 4))
-      .else
-         lda #((^addr) | (stride << 4))
-      .endif
-   .else
-      lda #(^addr) | $10
-   .endif
-
-   sta VERA_addr_bank
-   lda #(>addr)
-   sta VERA_addr_high
-   lda #(<addr)
-   sta VERA_addr_low
-.endmacro
-
-.macro JSRFAR far_sr_addr, bank
-	jsr JSRFAR_kernal_addr
-	.addr far_sr_addr
-	.byte bank
-.endmacro
 
 .endif
