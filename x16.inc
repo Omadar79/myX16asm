@@ -196,6 +196,7 @@ SECOND                        := $FF93
 TKSA                          := $FF96
 MEMTOP                        := $FF99
 MEMBOT                        := $FF9C
+SCNKEY                        := $FF9F
 SETTMO                        := $FFA2
 IECIN                         := $FFA5
 IECOUT                        := $FFA8
