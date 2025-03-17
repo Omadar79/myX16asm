@@ -10,7 +10,7 @@
 .segment "ONCE"
 .segment "CODE"
 
-   jmp start
+   jmp init_game
 
 .include "x16.inc"
 .include "macros.inc"
@@ -80,22 +80,21 @@ VRAM_SPRITE_ATTR  = $1FC00 ; sprite 0 attribute table
 .include "dataSprites.inc"
 .include "dataMapTiles.inc"
 
-;------------------------------------ Variables
+;--------------------------------- Variables -------------------------------------------------------
 m_space_move: .byte 0
+m_frame_num:  .byte 0
+;m_vsync_trig: .byte 0
 m_sprite_x: .byte 180
 m_sprite_y: .byte 150
 default_irq_vector: .addr 0
+;---------------------------------End of Variables -----------------------------------------------
 
-
-start:
-;------------------------------------ Initialize the game
+;------------------------------------ Initialize the game ----------------------------------------
+init_game:
     
-    ; copy maps and tiles to VRAM
-    RAM_TO_VRAM map_tiles, VRAM_L0MAPS, MAPS_SIZE
-    RAM_TO_VRAM tiles, VRAM_TILES, TILES_SIZE
-
-    ;copy sprites to VRAM
-    RAM_TO_VRAM spaceship1, VRAM_SPRITE, 128
+    RAM_TO_VRAM map_tiles, VRAM_L0MAPS, MAPS_SIZE  ; copy maps to VRAM
+    RAM_TO_VRAM tiles, VRAM_TILES, TILES_SIZE      ; copy tiles to VRAM
+    RAM_TO_VRAM spaceship1, VRAM_SPRITE, 128       ; copy sprites to VRAM
 
     ; Set the screen mode
     lda #SCALE ; 2x scale
@@ -126,7 +125,7 @@ start:
     stz VERA_L1_vscroll_l ; vertical scroll = 0
     stz VERA_L1_vscroll_h
     
-
+    ; configure sprites
     VERA_SET_ADDR VRAM_SPRITE_ATTR,1
     lda #<(VRAM_SPRITE >> 5)
        sta VERA_data0
@@ -145,153 +144,166 @@ start:
     ;lda #$F0 ;(SPRITE_64H | SPRITE_64W)    ; palette offset
     sta VERA_data0
 
-    ; Enable sprites
+    ; Enable Vera Layers and Sprites
     stz VERA_ctrl        ; Set DCSEL to 0
     lda #$71  ;enable sprites, layer 1, layer 0
     sta VERA_dc_video
 
+    ; Initialize game variables
     lda #SPACE_DELAY ;initialize our paralax  counter
     sta m_space_move
 
-;---------------IRQ Initializations
-    
-    ; backup default RAM IRQ vector
-    lda IRQVec
+;IRQ Initializations 
+init_irq:   
+    sei ; disable IRQ while vector is changing
+    lda IRQVec  ; backup default IRQ vector
     sta default_irq_vector
     lda IRQVec+1
     sta default_irq_vector+1
 
     ; overwrite RAM IRQ vector with custom handler address
-    sei ; disable IRQ while vector is changing
     lda #<custom_irq_handler
     sta IRQVec
     lda #>custom_irq_handler
     sta IRQVec+1
-    lda #VSYNC_BIT ; make VERA only generate VSYNC IRQs
-    sta VERA_ien
     cli ; enable IRQ now that vector is properly set
 
+    lda #VSYNC_BIT ; make VERA only generate VSYNC IRQs
+    sta VERA_ien
+;------------------------------------ End of Game Initialization the game ------------------------------------
 
-
-
-;------------------------------------ Start the Game Loop
+;------------------------------------ Start the Game Loop ----------------------------------------------------
 @main_loop:
     wai ; do nothing in main loop, just let ISR do everything
-
+    ;lda vsync_trig
     bra @main_loop
-   ; never return, just wait for reset
+    
+    ;VSYNC has triggered
+;------------------------------------ End of Game Loop ------------------------------------------------------
+
+;------------------------------------ Game Subroutines ------------------------------------------------------
+
+game_tick_loop:  ;one every 60th of a second
+    inc m_frame_num ;increment frame counter
+    lda m_frame_num 
+    cmp #60    
+    bne @tick       ;run tick code and check for frame 60
+    lda #0          ;on frame 60 we reset the frame counter 
+    sta m_frame_num ;and still run the last tick cod
+@tick: ;code to run every frame aka 1/60 second
+    jsr parallax_tick
+    jsr input_tick
+    jsr movePlayer_tick
+    rts
+
+;@return:
+ ;  rts
 
 
-  ;  jsr SCNKEY          ; Read a character from the keyboard
-  ;  cmp #$57           ; Compare with 'W' (up)
-  ;  beq move_up
-  ;  cmp #$41           ; Compare with 'A' (left)
-  ;  beq move_left
-  ;  cmp #$53           ; Compare with 'S' (down)
-  ;  beq move_down
-  ;  cmp #$44           ; Compare with 'D' (right)
-  ;  beq move_right
-  ;  cmp #$1E           ; Compare with cursor up
-  ;  beq move_up
-  ;  cmp #$1D           ; Compare with cursor left
-  ;  beq move_left
-  ;  cmp #$1F           ; Compare with cursor down
-  ;  beq move_down
-  ;  cmp #$1C           ; Compare with cursor right
-  ;  beq move_right
-  ;  cmp #$1B           ; Compare with ESC key
-  ;  beq exit_game
-  ;  jmp main_loop      ; Loop back to read the next character
 
-;------------------------------------ End of Game Loop
-
-
-;------------------------------------ Custom IRQ Handler
 
 custom_irq_handler:
-   lda VERA_isr
-   and #VSYNC_BIT
-   beq @continue ; non-VSYNC IRQ, no tick update
+    lda VERA_isr
+    and #VSYNC_BIT
+    beq @done_vsync 
+    jsr game_tick_loop
 
-   ; scroll ground (layer 1)
-   lda VERA_L1_vscroll_l
-   clc
-   sbc #1
-   sta VERA_L1_vscroll_l
-   lda VERA_L1_vscroll_h
-   sbc #0
-   sta VERA_L1_vscroll_h
-
-   ; handle parallax delay
-   dec m_space_move
-   bne @continue 
-
-   ; scroll  (layer 0) 
-   lda VERA_L0_vscroll_l
-   clc
-   sbc #1
-   sta VERA_L0_vscroll_l
-   lda VERA_L0_vscroll_h
-   sbc #0
-   sta VERA_L0_vscroll_h
-
-   ; reset parallax counter
-   lda #SPACE_DELAY
-   sta m_space_move
-
-@continue:      ; continue to default IRQ handler backed up earlier
-   jmp (default_irq_vector)
-   ; RTI will happen after jump
+@done_vsync:      ; continue to default IRQ handler backed up earlier
+   jmp (default_irq_vector); RTI will happen after jump
 
 
-;;------------------------------------ Game Subroutines
-;move_up:
-;    lda m_sprite_y
-;    sec
-;    sbc #1             ; Decrease Y coordinate
-;    sta m_sprite_y
-;    jsr update_sprite_position
-;    jmp main_loop
-;
-;move_left:
-;    lda m_sprite_x
-;    sec
-;    sbc #1             ; Decrease X coordinate
-;    sta m_sprite_x
-;    jsr update_sprite_position
-;    jmp main_loop
-;
-;move_down:
-;    lda m_sprite_y
-;    clc
-;    adc #1             ; Increase Y coordinate
-;    sta m_sprite_y
-;    jsr update_sprite_position
-;    jmp main_loop
-;
-;move_right:
-;    lda m_sprite_x
-;    clc
-;    adc #1             ; Increase X coordinate
-;    sta m_sprite_x
-;    jsr update_sprite_position
-;    jmp main_loop    
-;
-;
-;update_sprite_position:
-;    ; Update the sprite position in VRAM
-;    VERA_SET_ADDR VRAM_SPRITE_ATTR,1
-;    lda m_sprite_x
-;    sta VERA_data0     ; Update X coordinate
-;    stz VERA_data0     ; Zero out high byte
-;    lda m_sprite_y
-;    sta VERA_data0     ; Update Y coordinate
-;    stz VERA_data0     ; Zero out high byte
-;    rts
-;
+parallax_tick:
+    ; Scroll the background
+    ; scroll ground (layer 1)
+    lda VERA_L1_vscroll_l
+    clc
+    sbc #1
+    sta VERA_L1_vscroll_l
+    lda VERA_L1_vscroll_h
+    sbc #0
+    sta VERA_L1_vscroll_h
+
+    ; handle parallax delay
+    dec m_space_move
+    bne @continue 
+
+    ; scroll  (layer 0) 
+    lda VERA_L0_vscroll_l
+    clc
+    sbc #1
+    sta VERA_L0_vscroll_l
+    lda VERA_L0_vscroll_h
+    sbc #0
+    sta VERA_L0_vscroll_h
+
+ @continue:    
+    ; reset parallax counter
+    lda #SPACE_DELAY
+    sta m_space_move
+    rts
+
+input_tick:
+    jsr SCNKEY          ; Read a character from the keyboard
+    cmp #$57           ; Compare with 'W' (up)
+    beq @move_up
+    cmp #$41           ; Compare with 'A' (left)
+    beq @move_left
+    cmp #$53           ; Compare with 'S' (down)
+    beq @move_down
+    cmp #$44           ; Compare with 'D' (right)
+    beq @move_right
+    cmp #$1E           ; Compare with cursor up
+    beq @move_up
+    cmp #$1D           ; Compare with cursor left
+    beq @move_left
+    cmp #$1F           ; Compare with cursor down
+    beq @move_down
+    cmp #$1C           ; Compare with cursor right
+    beq @move_right
+    cmp #$1B           ; Compare with ESC key
+    rts
+
+
+@move_up:
+    lda m_sprite_y
+    sec
+    sbc #1             ; Decrease Y coordinate
+    sta m_sprite_y
+    rts  
+@move_left:
+    lda m_sprite_x
+    sec
+    sbc #1             ; Decrease X coordinate
+    sta m_sprite_x
+    rts
+@move_down:
+    lda m_sprite_y
+    clc
+    adc #1             ; Increase Y coordinate
+    sta m_sprite_y
+    rts
+@move_right:
+    lda m_sprite_x
+    clc
+    adc #1             ; Increase X coordinate
+    sta m_sprite_x
+    rts   
+
+
+movePlayer_tick:
+    ; Update the sprite position in VRAM
+    VERA_SET_ADDR VRAM_SPRITE_ATTR,1
+    lda m_sprite_x
+    sta VERA_data0     ; Update X coordinate
+    stz VERA_data0     ; Zero out high byte
+    lda m_sprite_y
+    sta VERA_data0     ; Update Y coordinate
+    stz VERA_data0     ; Zero out high byte
+    rts
+
 ;exit_game:
-;    ; Code to exit the game
+    ; Code to exit the game
 ;    rts    
-;
-;
-;;------------------------------------ End of Game Subroutines
+
+
+;------------------------------------ End of Game Subroutines
