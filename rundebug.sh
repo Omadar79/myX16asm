@@ -1,0 +1,1 @@
+x16emu -prg GAME.prg -scale 2 -debug -run

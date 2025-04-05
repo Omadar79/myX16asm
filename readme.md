@@ -1,4 +1,4 @@
-## Commander X16 Retro Space Shoot-Em Up Game
+# Commander X16: Retro Space Shoot-Em Up Game
 
 Welcome to my first Commander X16 project! This project is a learning exercise where I am diving into assembly language programming to create a retro-style space shoot-em up game. The game is being developed for the Commander X16, a modern 8-bit computer inspired by the classic computers of the 1980s.
 
@@ -13,3 +13,10 @@ This project aims to recreate the nostalgic feel of classic space shoot-em up ga
 - **joystick Controls**: Implement an SNES controller as another method to control the spacehip
 - **Assembly Language**: Written in assembly language for an authentic retro programming experience. 
 
+## Special Thanks
+
+- **The CommanderX16 Team**: including the 8-Bit guy for inspiring me to learn retro game dev
+    - https://www.youtube.com/The8BitGuy
+- **Matt Heffernan**: for all his youtube tutorials and code examples. 
+    - https://github.com/SlithyMatt
+    - https://www.youtube.com/@slithymatt

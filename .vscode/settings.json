@@ -1,90 +1,100 @@
 {
-    "editor.tokenColorCustomizations": {
-        "[*Light*]": {
-            "textMateRules": [
+    "editor.tokenColorCustomizations":
+     {
+        "[*]": {
+            "textMateRules": [  
                 {
-                    "scope": "ref.matchtext",
+                    "scope": "constant.numeric.hex",
                     "settings": {
-                        "foreground": "#000"
+                        "foreground": "#df9542ef" 
                     }
                 },
                 {
-                    "scope": "entity.name.function",
+                    "scope": "constant.numeric.binary",
                     "settings": {
-                        "foreground": "#007700" // Dark green for function names
+                        "foreground": "#e6d64cef" 
                     }
                 },
                 {
-                    "scope": "keyword.control",
+                    "scope": "constant.numeric.decimal",
                     "settings": {
-                        "foreground": "#0000FF" // Blue for control keywords
+                        "foreground": "#d84155ef" 
+                    }
+                },              
+                {
+                    "scope": "keyword",
+                    "settings": {
+                        "foreground": "#b9c7bf" 
+                    }
+                },
+        
+                {
+                    "scope": "keyword.ca65",  //CA65 specific keywords
+                    "settings": {
+                        "foreground": "#0eb9b9" 
+                    }
+                },
+               
+                {
+                    "scope": "keyword.control",  //if, else, etc.
+                    "settings": {
+                        "foreground": "#0993ca" 
+                    }
+                },
+    
+                {
+                    "scope": "support.type",  //Most of the ASM commands (lda, sta, etc.)
+                    "settings": {
+                        "foreground": "#3ee771" 
+                    }
+                },
+        
+                {
+                    "scope": "storage", //import, include, etc.
+                    "settings": {
+                        "foreground": "#e6d226" 
                     }
                 },
                 {
-                    "scope": "variable.parameter",
+                    "scope": "variable.ca65.constants",
                     "settings": {
-                        "foreground": "#FF00FF" // Magenta for parameters
+                        "foreground": "#cb71eed3" 
                     }
                 },
                 {
-                    "scope": "variable.name",
+                    "scope": "variable.ca65.uppercase",
                     "settings": {
-                        "foreground": "#500474"
+                        "foreground": "#cb71eed3"  
                     }
                 },
                 {
-                    "scope": "comment",
+                    "scope": "variable.ca65",
                     "settings": {
-                        "foreground": "#008000" // Dark green for comments in light themes
+                        "foreground": "#71a5eed3" 
                     }
-                }
-            ]
-        },
-        "[*Dark*]": {
-            "textMateRules": [
+                },
+               
                 {
-                    "scope": "ref.matchtext",
+                    "scope": "entity.other.attribute-name",   //label names
                     "settings": {
-                        "foreground": "#fff"
+                        "foreground": "#ac8456"
                     }
                 },
                 {
-                    "scope": "entity.name.function",
+                    "scope": "variable.macro",
                     "settings": {
-                        "foreground": "#00FF00" // Bright green for function names
+                        "foreground": "#d4fc46d3" 
                     }
                 },
                 {
-                    "scope": "keyword.control",
+                    "scope": "comments",
                     "settings": {
-                        "foreground": "#00FFFF" // Cyan for control keywords
+                    "foreground": "#3a8833a9" // Bright green for comments in dark themes
                     }
                 },
-                {
-                    "scope": "variable.parameter",
-                    "settings": {
-                        "foreground": "#FF00FF" // Magenta for parameters
-                    }
-                },
-                {
-                    "scope": "variable.name",
-                    "settings": {
-                        "foreground": "#8d3fd6"
-                    }
-                },
-                {
-                    "scope": "support.function",
-                    "settings": {
-                        "foreground": "#d66a3f"
-                    }
-                },
-                {
-                    "scope": "comment",
-                    "settings": {
-                        "foreground": "#008000" // Bright green for comments in dark themes
-                    }
-                }
+
             ]
         }
     }
+
 }

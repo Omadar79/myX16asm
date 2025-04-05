@@ -3,8 +3,8 @@
 ;// X16 addresses, values, and constants
 ;//
 ;////////////////////////////////////////////////////////////
-.ifndef X16_INC
-X16_INC  = 1
+.ifndef _X16_INC
+_X16_INC  = 1
 
 .ifndef __CX16__
 __CX16__ = 1
@@ -15,105 +15,56 @@ SD_DEVICE   = 1
 HOST_DEVICE = 8
 DISK_DEVICE = HOST_DEVICE
 
-; Kernal Registers
-r0                = $02
-r0L               = r0
-r0H               = r0+1
-r1                = $04
-r1L               = r1
-r1H               = r1+1
-r2                = $06
-r2L               = r2
-r2H               = r2+1
-r3                = $08
-r3L               = r3
-r3H               = r3+1
-r4                = $0A
-r4L               = r4
-r4H               = r4+1
-r5                = $0C
-r5L               = r5
-r5H               = r5+1
-r6                = $0E
-r6L               = r6
-r6H               = r6+1
-r7                = $10
-r7L               = r7
-r7H               = r7+1
-r8                = $12
-r8L               = r8
-r8H               = r8+1
-r9                = $14
-r9L               = r9
-r9H               = r9+1
-r10               = $16
-r10L              = r10
-r10H              = r10+1
-r11               = $18
-r11L              = r11
-r11H              = r11+1
-r12               = $1A
-r12L              = r12
-r12H              = r12+1
-r13               = $1C
-r13L              = r13
-r13H              = r13+1
-r14               = $1E
-r14L              = r14
-r14H              = r14+1
-r15               = $20
-r15L              = r15
-r15H              = r15+1
+;Zero-Page userspace
+ZP_PTR_1          = $7E	; first four pointers for temporary use only
+ZP_PTR_2          = $22
+ZP_PTR_3          = $24
+ZP_PTR_4          = $26
 
-; Zero-Page userspace
-ZP_PTR_1          = $30
 
 ; I/O Registers
-VERA_addr_low     = $9F20
-VERA_addr_high    = $9F21
-VERA_addr_bank    = $9F22
-VERA_data0        = $9F23
-VERA_data1        = $9F24
-VERA_ctrl         = $9F25
-VERA_ien          = $9F26
-VERA_isr          = $9F27
-VERA_irqline_l    = $9F28
-VERA_dc_video     = $9F29
-VERA_dc_hscale    = $9F2A
-VERA_dc_vscale    = $9F2B
-VERA_dc_border    = $9F2C
-VERA_dc_hstart    = $9F29
+VERA_ADDR_LOW     = $9F20
+VERA_ADDR_HIGH    = $9F21
+VERA_ADDR_BANK    = $9F22
+VERA_DATA0        = $9F23
+VERA_DATA1        = $9F24
+VERA_CTRL         = $9F25
+VERA_IEN          = $9F26 ; VERA IRQ, IRQ line (bit7), SCANLINE (bit6)
+VERA_ISR         = $9F27 ; VERA IRQ, Sprite Collision (bit 7-4)
+VERA_IRQLINE_L    = $9F28 ; VERA IRQ Line low byte. 0-7 are VERA IRQs
+VERA_DC_VIDEO    = $9F29
+VERA_DC_HSCALE   = $9F2A
+VERA_DC_VSCALE     = $9F2B
+VERA_DC_BORDER    = $9F2C
+VERA_DC_HSTART    = $9F29
 VERA_dc_hstop     = $9F2A
 VERA_dc_vsstart   = $9F2B
 VERA_dc_vstop     = $9F2C
-VERA_L0_config    = $9F2D
-VERA_L0_mapbase   = $9F2E
-VERA_L0_tilebase  = $9F2F
-VERA_L0_hscroll_l = $9F30
-VERA_L0_hscroll_h = $9F31
-VERA_L0_vscroll_l = $9F32
-VERA_L0_vscroll_h = $9F33
-VERA_L1_config    = $9F34
-VERA_L1_mapbase   = $9F35
-VERA_L1_tilebase  = $9F36
-VERA_L1_hscroll_l = $9F37
-VERA_L1_hscroll_h = $9F38
-VERA_L1_vscroll_l = $9F39
-VERA_L1_vscroll_h = $9F3A
-VERA_audio_ctrl   = $9F3B
-VERA_audio_rate   = $9F3C
-VERA_audio_data   = $9F3D
-VERA_spi_data     = $9F3E
-VERA_spi_ctrl     = $9F3F
+VERA_L0_CONFIG    = $9F2D
+VERA_L0_MAPBASE   = $9F2E
+VERA_L0_TILEBASE  = $9F2F
+VERA_L0_HSCROLL_L = $9F30
+VERA_L0_HSCROLL_H = $9F31
+VERA_L0_VSCROLL_L = $9F32
+VERA_L0_VSCROLL_H = $9F33
+VERA_L1_CONFIG    = $9F34
+VERA_L1_MAPBASE   = $9F35
+VERA_L1_TILEBASE  = $9F36
+VERA_L1_HSCROLL_L = $9F37
+VERA_L1_HSCROLL_H = $9F38
+VERA_L1_VSCROLL_L = $9F39
+VERA_L1_VSCROLL_H = $9F3A
+VERA_AUDIO_CTRL  = $9F3B
+VERA_AUDIO_RATE   = $9F3C
+VERA_AUDIO_DATA   = $9F3D
+VERA_SPI_DATA     = $9F3E
+VERA_SPI_CTRL     = $9F3F
 
 ROM_BANK          = $01
 RAM_BANK          = $00
 
-YM_reg            = $9F40
-YM_data           = $9F41
-
-; Emulator Registers
-GIF_ctrl          = $9FB5
+YM_REG            = $9F40
+YM_DATA           = $9F41
 
 ; ROM Banks
 KERNAL_ROM_BANK   = 0
@@ -175,7 +126,7 @@ CLOCK_SET_DATE_TIME           := $FF4D
 CLOCK_GET_DATE_TIME           := $FF50
 JOYSTICK_SCAN                 := $FF53
 JOYSTICK_GET                  := $FF56
-SCREEN_MODE               		:= $FF5F
+SCREEN_MODE               	  := $FF5F
 SCREEN_SET_CHARSET            := $FF62
 PFKEY                         := $FF65
 MOUSE_CONFIG                  := $FF68
@@ -240,10 +191,10 @@ VRAM_palette   = $1FA00
 VRAM_sprattr   = $1FC00
 
 ; IRQ Vectors
-IRQVec         := $0314
-BRKVec         := $0316
-NMIVec         := $0318
-FETVec         := $03AF
+IRQVEC         := $0314
+BRKVEC         := $0316
+NMIVEC         := $0318
+FETVEC         := $03AF
 
 
 
