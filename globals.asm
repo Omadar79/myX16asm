@@ -1,3 +1,8 @@
+; //////////////////////////////////////////////////////////////////////
+; File:         globals.asm
+; Programmer:   Dustin Taub
+; Description:  Global variables and constants for the game 
+; //////////////////////////////////////////////////////////////////////
 .ifndef GLOBALS_INC
 GLOBALS_INC = 1
 
@@ -11,11 +16,15 @@ LAYERCONFIG_32x324BPP    = %00000010 ; 32x32 | Text/Tile Mode | T256 0 | BMP 0 |
 LAYERCONFIG_64X324BPP    = %00010010 ; 64x32 | Text/Tile Mode | T256 0 | BMP 0 | Color 4bpp
 LAYERCONFIG_BITMP4BPP    = %00000110 ; 00 00 | T256 0 | BMP 1 | Color 4bpp 10
 
-; Keyboard Keys
-SPACE             = $20
-SPADE             = $41
-CHAR_Q            = $51 ; "Q" key
-CLR               = $93
+SCREEN_MIN_Y_L      = $05
+SCREEN_MIN_Y_H      = $00
+SCREEN_MAX_Y_L      = $E0
+SCREEN_MAX_Y_H      = $00
+SCREEN_MIN_X_L      = $05
+SCREEN_MIN_X_H      = $00
+SCREEN_MAX_X_L      = $30
+SCREEN_MAX_X_H      = $01
+
 
 SPACE_DELAY       = 16  ; Parallax Scrolling
 
@@ -23,7 +32,7 @@ SPACE_DELAY       = 16  ; Parallax Scrolling
 
 VRAM_TILES          = $00000 ; 227 4bpp 16x16 tiles (may also be used as sprite frames)
 ; VRAM_LOADMAP        = $07800 ; 32x32 tilemap
-VRAM_SPRITES         = $08000 ; 192 4bpp 16x16 frames
+VRAM_SPRITES        = $08000 ; 192 4bpp 16x16 frames
 VRAM_BITMAP         = $0E000 ; 4bpp 320x240 bitmap
 VRAM_TILEMAP        = $17800 ; 128x128 tilemap
 VRAM_STARTSCRN      = $1F000 ; 64x32 tilemap
@@ -33,18 +42,23 @@ VRAM_SPRITE_ATTR    = $1FC00 ; sprite 0 attribute table
 
 ;--------------------------------- Variables -------------------------------------------------------
 ; (fractional numbers 192 = 0.75, 128 = 0.5 , 64 = 0.25 , 32 = 0.125 , etc)
-parallax_scroll_delay:  .byte 0
-frame_num:              .byte 0
-player_sprite_x:        .byte 50
-player_sprite_x_frac:   .byte 0        ; Fractional part of X position
-player_sprite_y:        .byte 50
-player_sprite_y_frac:   .byte 0        ; Fractional part of Y position
-player_speed:           .byte 2
-player_speed_frac:      .byte 128      ; factional part of peed in pixels 
-default_irq_vector:     .addr 0
+parallax_scroll_delay:      .byte 0
+frame_num:                  .byte 0
+player_sprite_x_l:          .byte 0       ; Low byte of X position
+player_sprite_x_h:          .byte 0        ; High byte of X position
+player_sprite_y_l:          .byte 0       ; Low byte of Y position
+player_sprite_y_h:          .byte 0        ; High byte of Y position, don't really use this other than address loading
+player_speed_x:             .byte 2
+player_speed_y:              .byte 2
+;player_speed_frac:         .byte 128      ; factional part of peed in pixels 
+;player_direction:            byte 0        ; 0 = no move, 1 = right, 2 = left, 3 = up, 4 = down
+player_sprite_index:        .byte 0        ; sprite index in VERA
+default_irq_vector:         .addr 0
 
-joystick_state:      .byte 0
-joystick_latch:      .byte $CF
+joystick_state:             .byte 0
+joystick_latch:             .byte $CF
+
+
 
 
 filenames:

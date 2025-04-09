@@ -1,8 +1,12 @@
-;//////////////////////////////////////////////////////////////////////
-;  game.asm
-;
-; This is where the game code starts
-;//////////////////////////////////////////////////////////////////////
+; //////////////////////////////////////////////////////////////////////
+; File:         game.asm
+; Programmer:   Dustin Taub
+; Description:  This is where the entire game starts. 
+;               -Initializes the game
+;               -Loads the game assets
+;               -Adds Custom IRQ Handlers
+;               -Handles the game loop           
+; //////////////////////////////////////////////////////////////////////
 
 .org $080D
 .segment "STARTUP"
@@ -16,44 +20,43 @@
 .include "zsound.inc"
 .include "filestovram.asm"
 .include "globals.asm"
+;.include "sprites.asm"
 
+ZP_PTR_DIR = $28 ; ZP pointer for direction  0 = no move, 1 = right, 2 = left, 3 = up, 4 = down
 
-;||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||
-;| $9F29******* Display Composer (DC_Video) ***********
-;|  |CNTRFDL|SPRT|L1|L0|NTCS/RGB|NTSC/Ch| OUT_MODE |
-;|      CNTRFDL 0 = Interlaced, 1 = Progressive
-;|      SPRT = Enable Sprites | L1 = Enable Layer 1 ;| L0 = Enable Layer 0
-;|      NTCS/RGB 0 = NTSC, 1 = RGB | NTSC/Ch 0 = NTSC, 1 = PAL 
-;|      OUT_MODE 0 = Video Disabled, 1 = VGA, 2 = NTSC(Compos/S-video), 3 = RGB 15hz
-;|
-;|        31 = 0011|0001               71 = 01110001
-;|      ORA40 = 0100|0000 = Enable Sprites
-;|      ORA20 = 0010|0000 = Enable Layer 1
-;|      ORA10 = 0001|0000 = Enable Layer 0
-;|      ORA70 = 0111|0001 = Enable Sprites, Layer 1, Layer 0
-;|
-;| $9F2D LO / 9F34 L1  *********Layer Config ***********
-;|  |MAP_H | MAP_W | T256 |BMP MODE| COLOR DEPTH |
-;|       MAP_H/MAP_W 0 = 32,1 = 64,2 = 128,3 = 256
-;|       BMP MODE 0 = Text/Tile, 1 = Bitmap
-;|       T256 0 = 16 color, 1 = 256 color
-;|       COLOR DEPTH 0 = 1bpp, 2 = 4bpp, 3 = 8bpp
-;|
-;| $9F2E LO / 9F35 L1  *****Layer Map Base **************
-;|  |tile map start address >> 9 |
-;|
-;|$9F2F LO / 9F36 L1  *****Layer Tile Base *************
-;|  | tile graphic base address >> 11 | TILE_H | TILE_W |
-;|         TILE_H 0 = 8pixel, 1 = 16pixel 
-;|         TILE_W 0 = 8pixel, 1 = 16pixel
-;||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-
-
+     ;||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
+     ;|       $9F29******* Display Composer (DC_Video) ***********
+     ;|        |CNTRFDL|SPRT|L1|L0|NTCS/RGB|NTSC/Ch| OUT_MODE |
+     ;|            CNTRFDL 0 = Interlaced, 1 = Progressive
+     ;|            SPRT = Enable Sprites | L1 = Enable Layer 1 ;| L0 = Enable Layer 0
+     ;|            NTCS/RGB 0 = NTSC, 1 = RGB | NTSC/Ch 0 = NTSC, 1 = PAL 
+     ;|            OUT_MODE 0 = Video Disabled, 1 = VGA, 2 = NTSC(Compos/S-video), 3 = RGB 15hz
+     ;|      
+     ;|              31 = 0011|0001               71 = 01110001
+     ;|            ORA40 = 0100|0000 = Enable Sprites
+     ;|            ORA20 = 0010|0000 = Enable Layer 1
+     ;|            ORA10 = 0001|0000 = Enable Layer 0
+     ;|            ORA70 = 0111|0001 = Enable Sprites, Layer 1, Layer 0
+     ;|      
+     ;|       $9F2D LO / 9F34 L1  *********Layer Config ***********
+     ;|        |MAP_H | MAP_W | T256 |BMP MODE| COLOR DEPTH |
+     ;|             MAP_H/MAP_W 0 = 32,1 = 64,2 = 128,3 = 256
+     ;|             BMP MODE 0 = Text/Tile, 1 = Bitmap
+     ;|             T256 0 = 16 color, 1 = 256 color
+     ;|             COLOR DEPTH 0 = 1bpp, 2 = 4bpp, 3 = 8bpp
+     ;|      
+     ;|       $9F2E LO / 9F35 L1  *****Layer Map Base **************
+     ;|        |tile map start address >> 9 |
+     ;|      
+     ;|      $9F2F LO / 9F36 L1  *****Layer Tile Base *************
+     ;|        | tile graphic base address >> 11 | TILE_H | TILE_W |
+     ;|               TILE_H 0 = 8pixel, 1 = 16pixel 
+     ;|               TILE_W 0 = 8pixel, 1 = 16pixel
+     ;||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
 ; ------------------------------------ Initialize the game ----------------------------------------
 start_game:
-        
-    ; ------------------------- Load Game Assets From Files
+    ; ------- Load Game Assets From Files
     ; load bitmap startscreen
     lda #> (VRAM_BITMAP >> 4 )
     ldx #< (VRAM_BITMAP >> 4 )
@@ -85,95 +88,87 @@ start_game:
 
     ; initial joystick state: Start & Select pressed
     lda #$CF
-    sta joystick_latch
-
-; IRQ Initializations 
+    sta joystick_latch 
 init_irq:
-    sei ; disable IRQ while we're changing the vector
-    lda IRQVEC  ; backup default IRQ vector
-    sta default_irq_vector 
+    ; ------- IRQ Initializations 
+    sei                         ; disable IRQ while we're initializing our custom irq handler
+    lda IRQVEC                  ; backup default IRQ vector
+    sta default_irq_vector      ; save the default IRQ vector address low byte
     lda IRQVEC + 1 
-    sta default_irq_vector + 1 
+    sta default_irq_vector + 1  ; save the default IRQ vector address high byte
 
-    ; overwrite RAM IRQ vector with custom handler address
-    lda #< custom_irq_handler 
-    sta IRQVEC 
-    lda #> custom_irq_handler 
-    sta IRQVEC + 1 
+    lda #< custom_irq_handler   ; reference our custom IRQ handler low byte
+    sta IRQVEC                  ; set the IRQ vector to our custom handler low byte 
+    lda #> custom_irq_handler   ; reference our custom IRQ handler high byte
+    sta IRQVEC + 1              ; set the IRQ vector to our custom handler high byte
 
-    lda #%11111111   ; SET VERA LineIRQ to trigger on line 255.
+    lda #%11111111              ; SET VERA LineIRQ to trigger on line 255.
 	sta VERA_IRQLINE_L 
 
-    lda #%00000011 ; Set VERA to trigger on scan line and vysnc
+    lda #%00000011              ; Set VERA to trigger on scan line and vysnc
     sta VERA_IEN 
-    cli ; enable IRQ now that vector is properly set
+    cli                         ; enable IRQ now that vector is properly set
 
-    
-    stz VERA_CTRL        ; Set DCSEL to 0
-    lda #%00010001 ; enable layer 0, and output mode to VGA
+    ; VERA initialize going into the start screen
+    stz VERA_CTRL               ; Set DCSEL to 0
+    lda #%00010001              ; enable layer 0, and output mode to VGA
     sta VERA_DC_VIDEO 
-;------------------------------------ End of Game Initialization the game ------------------------------------
-
 ;------------------------------------ Start Screen Loop ----------------------------------------------------
 startscreen_loop:
-    jsr SCNKEY           ; Read a character from the keyboard
-    cmp #$00             ; Check if no key is pressed
-    beq startscreen_loop ; Loop until a key is pressed
-
-    jsr gameplay_init
+    ; ------- Start Screen Loop, we might put loading logic behind the scenes
+    jsr SCNKEY                  ; Read a character from the keyboard
+    cmp #$00                    ; Check if no key is pressed
+    beq startscreen_loop        ; Loop until a key is pressed
+    jsr gameplay_init 
     
-    ;jmp @main_game_loop   ; Jump to the main game loop
-;------------------------------------ Start the Game Loop ----------------------------------------------------
+;------------------------------------ Main Game Loop ----------------------------------------------------
 @main_game_loop:
-    wai ; do nothing in main loop, just let ISR do everything
+    wai                         ; do nothing in main loop, just let ISR do everything
     ;lda vsync_trig
-    bra @main_game_loop ;loop indefinately 
-
-;------------------------------------ End of Game Loop ------------------------------------------------------
+    bra @main_game_loop         ; loop indefinately 
 
 ;------------------------------------ Game Subroutines ------------------------------------------------------
-
-game_tick_loop:  ; one every 60th of a second
-    inc frame_num ; increment frame counter
+game_tick_loop:
+    ;-------  game tick fires every 60th of a second
+    inc frame_num               ; increment frame counter
     lda frame_num 
     cmp #60    
-    bne @tick       ; run tick code and check for frame 60
-    lda #0          ; on frame 60 we reset the frame counter 
-    sta frame_num   ; and still run the last tick code
-@tick: ; code to run every frame aka 1/60 second
+    bne @tick                   ; run tick code and check for frame 60 
+    lda #0                      ; on frame 60 we reset the frame counter 
+    sta frame_num               ; and still run the last tick code
+@tick:                          ; code to run every frame aka 1/60 second
     jsr parallax_tick 
     jsr input_tick 
-    jsr movePlayer_tick 
+    lda ZP_PTR_DIR 
+    cmp #0
+    beq @tick_done           ; if no move then skip to done move player
+    jsr movePlayer_tick       
+@tick_done:
     rts 
 
-
 custom_irq_handler:
-    lda #%00000010  ; Check for line IRQ
+    ;------- Custom IRQ Handler that still allows the Kernal IRQ to run at the end of vsync
+    lda #%00000010              ; Check for scanline IRQ
 	and VERA_ISR 
-	bne custom_irq_handler_line 
-
+	bne custom_irq_scanline_handler 
     lda VERA_ISR 
-    and #%00000001 ; check for vsync IRQ
+    and #%00000001              ; check for vsync IRQ
     beq @done_vsync 
-
     jsr game_tick_loop 
-
-@done_vsync:      ; continue to default IRQ handler backed up earlier
-   jmp (default_irq_vector); RTI will happen after jump
-
-; Line IRQ Handler for a consistent music playback
-custom_irq_handler_line:
-    sta VERA_ISR ; Acknowledge the line IRQ 
+@done_vsync:                    ; continue to default IRQ handler backed up earlier
+   jmp (default_irq_vector)     ; RTI will happen after jump
+custom_irq_scanline_handler:        ; Line IRQ Handler ties to the VERA line IRQ
+    sta VERA_ISR                ; Acknowledge the line IRQ 
 	; jsr PCM_PLAY
     ; jsr ZSM_PLAYIRQ
-	ply ; Directly exit the IRQ, since the Kernal IRQ handler should only run
-	plx ; once per frame. It usually restores the registers, so we need
-	pla ; to do so here in order to maintain the stack and registers properly.
+	ply                         ; Directly exit the IRQ, since the Kernal IRQ handler should only run once per frame
+	plx                         ; Pull the registers back from the stack
+	pla                         ; in order to maintain the stack and registers properly.
 	rti 
 
 parallax_tick:
-    ; Scroll the background
-    ; scroll ground (layer 1)
+                                ; Scroll the background
+                                ; scroll ground (layer 1)
     lda VERA_L1_VSCROLL_L 
     clc 
     sbc #1
@@ -181,12 +176,10 @@ parallax_tick:
     lda VERA_L1_VSCROLL_H 
     sbc #0 
     sta VERA_L1_VSCROLL_H 
-
-    ; handle parallax delay
+                                ; handle parallax delay
     dec parallax_scroll_delay 
     bne @continue 
-
-    ; scroll  (layer 0) 
+                                ; scroll  (layer 0) 
     lda VERA_L0_VSCROLL_L 
     clc 
     sbc #1
@@ -194,9 +187,8 @@ parallax_tick:
     lda VERA_L0_VSCROLL_H 
     sbc #0
     sta VERA_L0_VSCROLL_H 
-
  @continue:    
-    ; reset parallax counter
+                                ; reset parallax counter
     lda #SPACE_DELAY
     sta parallax_scroll_delay 
     rts 
@@ -226,125 +218,221 @@ parallax_tick:
 ;| NOTE: keyboard allow LEFT and RIGHT and/or UP and DOWN to be pressed at the same time.
 ;|
 ;||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-input_tick:
-    ; Read joystick state
-    jsr JOYSTICK_SCAN  ; Scan the joystick but this might depend on default IRQ vector
-    lda #1 ; joystick 1
-    jsr JOYSTICK_GET ; check the first joystick 
+input_tick:                     ; Read joystick state
+    stz ZP_PTR_DIR              ; reset player direction to 0 (no move)
+    jsr JOYSTICK_SCAN           ; Scan the joystick but this might depend on default IRQ vector
+    lda #1                      ; joystick 1
+    jsr JOYSTICK_GET            ; check the first joystick 
     cpy #0
-    beq @check_inputs ; if no joystick fall through to check keyboard joystick
-    lda #0 ;keyboard joystick 0
+    beq @input_prev_state       ; if no joystick fall through to check keyboard joystick
+    lda #0                      ; keyboard joystick 0
     jsr JOYSTICK_GET  
-@check_inputs:
-    sta joystick_state ; save the current state of the joystick from JOYSTICK_GET
-    eor joystick_latch ; exclusive OR the last state to check for button state changes
-    sta joystick_latch ; save this for next time to see state changes
-    lda joystick_state ; pull back in the current state
-    bit #%00001000  ;bitwise AND to check for UP button (ie A register bit 3 being 0)
-    beq @perform_up_dpad     ; if UP button pressed we don't want to check down incase it's also being pressed somehow
-    bit #%00000100  ;bitwise AND to check for down button (ie A register bit 2 being 0)  
-    beq @perform_down_dpad   ; if down button is also not pressed fall threw to check left and right
-@check_leftright_dpad:
-    lda joystick_state ; pull back in the current state
-    bit #%00000010  ;bitwise AND to check for left button (ie A register bit 1 being 0)
-    beq @perform_left_dpad
-    bit #%00000001  ;bitwise AND to check for right button (ie A register bit 0 being 0)
-    beq @perform_right_dpad
-    bra @check_start_btn ; if not right or left we can jump to check start button
+@input_prev_state:
+    sta joystick_state          ; save the current state of the joystick from JOYSTICK_GET
+    eor joystick_latch          ; exclusive OR the last state to check for button state changes
+    sta joystick_latch          ; save this for next time to see state changes
+    ;@check_updown_dpad:       ; check and perform up and down DPAD buttons
+    lda joystick_state          ; pull back in the current state
+    bit #%00001000              ; bitwise AND to check for UP button (ie A register bit 3 being 0)
+    beq @perform_up_dpad        ; if UP button pressed we don't want to check down incase it's also being pressed somehow
+    bit #%00000100              ; bitwise AND to check for down button (ie A register bit 2 being 0)  
+    beq @perform_down_dpad      ; if down button is also not pressed fall threw to check left and right
+    bra @check_leftright_dpad   ; if not up or down we can check left then right
    
-@perform_up_dpad:  ; code to perform when up button DPAD pressed
-    lda player_sprite_y_frac  
-    sec 
-    sbc player_speed_frac        ; Subtract fractional speed adjustment
-    sta player_sprite_y_frac 
-    bcs @skip_y_decrement        ; If no borrow, skip integer decrement
-    lda player_sprite_y          ; Handle integer part
-    sec 
-    sbc player_speed             ; Subtract integer speed adjustment
-    sta player_sprite_y 
-    @skip_y_decrement:
+@perform_up_dpad:               ; code to perform when up button DPAD pressed
+    lda #3                    ; set player direction to up
+    sta ZP_PTR_DIR 
+    bra @check_leftright_dpad 
+@perform_down_dpad:             ; code to perform when down button DPAD pressed
+    lda #4                    ; set player direction to down
+    sta ZP_PTR_DIR 
+    bra @check_leftright_dpad 
 
-    bra @check_leftright_dpad ;even if up or down performed we can check left then right
-@perform_down_dpad: ; code to perform when down button DPAD pressed
-    lda player_sprite_y_frac 
-    clc 
-    adc player_speed_frac        ; Add fractional speed adjustment
-    sta player_sprite_y_frac 
-    bcc @skip_y_increment        ; If no carry, skip integer increment
-    lda player_sprite_y          ; Handle integer part
-    clc 
-    adc player_speed             ; Add integer speed adjustment
-    sta player_sprite_y 
-@skip_y_increment:
-    bra @check_leftright_dpad ; even if up or down performed we can check left then right
-@perform_left_dpad: ; code to perform when left DPAD button pressed
-    lda player_sprite_x_frac 
-    sec 
-    sbc player_speed_frac        ; Subtract fractional speed adjustment
-    sta player_sprite_x_frac 
-    bcs @skip_x_decrement        ; If no borrow, skip integer decrement
-    lda player_sprite_x          ; Handle integer part
-    sec 
-    sbc player_speed            ; Subtract integer speed adjustment
-    sta player_sprite_x 
-@skip_x_decrement:
-    bra @check_start_btn ; check start button next
-@perform_right_dpad: ; code to perform when lright DPAD button pressed
-    lda player_sprite_x_frac 
-    clc 
-    adc player_speed_frac        ; Add fractional speed adjustment
-    sta player_sprite_x_frac 
-    bcc @skip_x_increment        ; If no carry, skip integer increment
-    lda player_sprite_x          ; Handle integer part
-    clc 
-    adc player_speed            ; Add integer speed adjustment
-    sta player_sprite_x 
-@skip_x_increment:
-  ; bra @check_start_btn ; fall threw to check start button next
-@check_start_btn:  ;check and perform start button 
-   bit #%00010000   ;bitwise AND to check for start button (ie A register bit 4 being 0)    
-   bne @check_select_btn ; button is not pressed so skip to check select button  
-   lda joystick_latch   ; button is pressed but is it a new press?  Check the cache latch state
-   bit #%00010000   ;bitwise AND to check for start button (ie A register bit 4 being 0)  
-   beq @check_select_btn  ;if not a new press then skip to check select button
-    ;TODO code to perform when start button pressed
+@check_leftright_dpad:
+    lda joystick_state          ; pull back in the current state
+    bit #%00000010              ; bitwise AND to check for left button (ie A register bit 1 being 0)
+    beq @perform_left_dpad 
+    bit #%00000001              ; bitwise AND to check for right button (ie A register bit 0 being 0)
+    beq @perform_right_dpad 
+    bra @check_start_btn        ; if not right or left we can jump to check start button
 
-@check_select_btn:  ;check and perform select button 
-   lda joystick_state ; pull back in the current state
-   bit #%00100000   ;bitwise AND to check for select button (ie A register bit 5 being 0) 
-   bne @latch    ; button is not pressed so skip to end
-   lda joystick_latch   ; button is pressed but is it a new press?  Check the cache state
-   bit #%00100000 ;bitwise AND to check for select button (ie A register bit 5 being 0) in the cache
+@perform_left_dpad:             ; code to perform when left DPAD button pressed
+    lda #2                      ; set player direction to down
+    sta ZP_PTR_DIR 
+    bra @check_start_btn        ; Continue to check start button
+
+@perform_right_dpad:            ; code to perform when right DPAD button pressed 
+    lda #1                      ; set player direction to down
+    sta ZP_PTR_DIR 
+    ;bra @check_start_btn      ; commented out to allow it to fall through to check start button
+
+@check_start_btn:               ; check and perform start button 
+   bit #%00010000               ; bitwise AND to check for start button (ie A register bit 4 being 0)    
+   bne @check_select_btn        ; button is not pressed so skip to check select button  
+   lda joystick_latch           ; button is pressed but is it a new press?  Check the cache latch state
+   bit #%00010000               ; bitwise AND to check for start button (ie A register bit 4 being 0)  
+   beq @check_select_btn        ; if not a new press then skip to check select button
+;TODO code to perform when start button pressed
+
+@check_select_btn:              ; check and perform select button 
+   lda joystick_state           ; pull back in the current state
+   bit #%00100000               ; bitwise AND to check for select button (ie A register bit 5 being 0) 
+   bne @latch                   ; button is not pressed so skip to end
+   lda joystick_latch           ; button is pressed but is it a new press?  Check the cache state
+   bit #%00100000               ; bitwise AND to check for select button (ie A register bit 5 being 0) in the cache
    beq @latch 
+;TODO code to perform when select button pressed
 @latch:
    lda joystick_state 
    sta joystick_latch 
    rts 
 
-movePlayer_tick:
-    ; pull up the sprite atribute in VRAM
+movePlayer_tick:   ; Move the sprite by player speed and directio                           
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
-    lda VERA_DATA0 ; move past the address
-    lda VERA_DATA0 
-    lda player_sprite_x 
-    sta VERA_DATA0     ; Update X coordinate (integer part)
-    stz VERA_DATA0     ; Zero out high byte
-    lda player_sprite_y 
-    sta VERA_DATA0     ; Update Y coordinate (integer part)
-    stz VERA_DATA0     ; Zero out high byte
+    lda VERA_DATA0              ; skip past the first byte of the sprite attribute
+    lda VERA_DATA0              ; skip past the second byte of the sprite attribute
+    lda VERA_DATA0              ; Read low byte of X position
+    sta player_sprite_x_l       ; Store in zero-page
+    lda VERA_DATA0              ; Read high byte of X position
+    sta player_sprite_x_h    
+    lda VERA_DATA0              ; Read low byte of Y position
+    sta player_sprite_y_l     
+    lda VERA_DATA0              ; Read high byte of Y position
+    sta player_sprite_y_h 
+
+    ldy ZP_PTR_DIR 
+    cpy #1
+    beq @move_x_positive    ; +X
+    cpy #2
+    beq @move_x_negative    ; -X
+    cpy #3
+    beq @move_y_negative    ; +Y
+    cpy #4
+    beq @move_y_positive    ; -Y
     rts 
 
+@move_x_positive:
+    lda player_sprite_x_l 
+    clc 
+    adc player_speed_x           
+    sta player_sprite_x_l 
+    lda player_sprite_x_h 
+    adc #0                  
+    sta player_sprite_x_h 
+    bra @write_position
+
+@move_x_negative:
+    lda player_sprite_x_l 
+    sec 
+    sbc player_speed_x             
+    sta player_sprite_x_l 
+    lda player_sprite_x_h 
+    sbc #0            
+    sta player_sprite_x_h 
+    bra @write_position
+
+@move_y_positive:
+    lda player_sprite_y_l  
+    clc 
+    adc player_speed_y 
+    sta player_sprite_y_l 
+    lda player_sprite_y_h 
+    adc #0                
+    sta player_sprite_y_h 
+    bra @write_position
+
+@move_y_negative:
+    lda player_sprite_y_l  
+    sec 
+    sbc player_speed_y 
+    sta player_sprite_y_l 
+    lda player_sprite_y_h 
+    sbc #0         
+    sta player_sprite_y_h 
+    bra @write_position
+
+@write_position:                    ; Write updated position back to VRAM
+    jsr check_boundaries  
+    MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
+    lda VERA_DATA0 
+    lda VERA_DATA0 
+    lda player_sprite_x_l                   ; Write low byte of X
+    sta VERA_DATA0  
+    lda player_sprite_x_h              ; Write high byte of X
+    sta VERA_DATA0  
+    lda player_sprite_y_l                  ; Write low byte of Y
+    sta VERA_DATA0  
+    lda player_sprite_y_h               ; Write high byte of Y
+    sta VERA_DATA0  
+    rts     
+check_boundaries:
+    ; Check X boundaries
+    lda player_sprite_x_h        ; High byte of X
+    cmp #SCREEN_MAX_X_H          ; Compare with max high byte
+    bcc @check_x_min               ; If less than max, check Y
+    bne @clamp_x_max                 ; If greater, clamp X
+    lda player_sprite_x_l        ; Low byte of X
+    cmp #SCREEN_MAX_X_L          ; Compare with max low byte
+    bcc @check_x_min             ;   If less than max, check minimum
+@clamp_x_max:
+    lda #SCREEN_MAX_X_L          ; Clamp low byte of X
+    sta player_sprite_x_l
+    lda #SCREEN_MAX_X_H          ; Clamp high byte of X
+    sta player_sprite_x_h
+    bra @check_y  
+
+@check_x_min:
+    lda player_sprite_x_h        ; High byte of X
+    cmp #SCREEN_MIN_X_H            ; Compare with min high byte (0)
+    bne @done_x_min              ; If greater, no need to clamp
+    lda player_sprite_x_l        ; Low byte of X
+    cmp #SCREEN_MIN_X_L            ; Compare with min low byte (0)
+    bcs @done_x_min              ; If carry is set, no underflow
+    lda #SCREEN_MIN_X_L            ; Clamp low byte of X to 0
+    sta player_sprite_x_l
+    lda #SCREEN_MIN_X_H            ; Clamp high byte of X to 0
+    sta player_sprite_x_h
+@done_x_min:
+@check_y: 
+    ; Check Y boundaries
+    lda player_sprite_y_h        ; High byte of Y
+    cmp #SCREEN_MAX_Y_H          ; Compare with max high byte
+    bcc @check_y_min            ; If less than max, we're done
+    bne @clamp_y_max                 ; If greater, clamp Y
+    lda player_sprite_y_l        ; Low byte of Y
+    cmp #SCREEN_MAX_Y_L          ; Compare with max low byte
+    bcc @check_y_min             ; If less than max, check minimum
+@clamp_y_max: 
+    lda #SCREEN_MAX_Y_L          ; Clamp low byte of Y
+    sta player_sprite_y_l
+    lda #SCREEN_MAX_Y_H          ; Clamp high byte of Y
+    sta player_sprite_y_h
+    bra @doneboundry 
+@check_y_min:
+    lda player_sprite_y_h        ; High byte of Y
+    cmp #SCREEN_MIN_Y_H            ; Compare with min high byte (0)
+    bne @done_y_min              ; If greater, no need to clamp
+    lda player_sprite_y_l        ; Low byte of Y
+    cmp #SCREEN_MIN_Y_L            ; Compare with min low byte (0)
+    bcs @done_y_min              ; If carry is set, no underflow
+    lda #SCREEN_MIN_Y_L            ; Clamp low byte of Y to 0
+    sta player_sprite_y_l
+    lda #SCREEN_MIN_Y_H            ; Clamp high byte of Y to 0
+    sta player_sprite_y_h
+@done_y_min:
+@doneboundry:
+    rts
 gameplay_init:
-    ; Setup tiles on layer 0
+                                    ; Setup tiles on layer 0
     lda #LAYERCONFIG_32x324BPP 
     sta VERA_L0_CONFIG 
     lda #(VRAM_TILEMAP >> 9)
     sta VERA_L0_MAPBASE 
     lda #(VRAM_TILES >> 9 )
     sta VERA_L0_TILEBASE 
-    stz VERA_L0_HSCROLL_L ; horizontal scroll = 0
+    stz VERA_L0_HSCROLL_L           ; horizontal scroll = 0
     stz VERA_L0_HSCROLL_H 
-    stz VERA_L0_VSCROLL_L ; vertical scroll = 0
+    stz VERA_L0_VSCROLL_L           ; vertical scroll = 0
     stz VERA_L0_VSCROLL_H 
     
     ; configure layer 1: 
@@ -354,9 +442,9 @@ gameplay_init:
     sta VERA_L1_MAPBASE 
     lda #(VRAM_TILES >> 9 ) 
     sta VERA_L1_TILEBASE 
-    stz VERA_L1_HSCROLL_L ; horizontal scroll = 0
+    stz VERA_L1_HSCROLL_L           ; horizontal scroll = 0
     stz VERA_L1_HSCROLL_H 
-    stz VERA_L1_VSCROLL_L ; vertical scroll = 0
+    stz VERA_L1_VSCROLL_L           ; vertical scroll = 0
     stz VERA_L1_VSCROLL_H 
     
     ;load sprites
@@ -371,37 +459,43 @@ gameplay_init:
     sta VERA_DATA0 
     lda #> (VRAM_SPRITES >> 5)
     sta VERA_DATA0 
-
-    lda player_sprite_x 
-    sta VERA_DATA0  ; x attribute
-    stz VERA_DATA0  ; zero out high byte
-    lda player_sprite_y 
-    sta VERA_DATA0 ; y attribute
-    stz VERA_DATA0 ; zero out high byte
-    lda #%00001100 ; zlevel, sprite in from of layer1
+    lda player_sprite_x_l       ; Write X position (16-bit)
+    sta VERA_DATA0              ; Low byte of X position
+    lda player_sprite_x_h 
+    stz VERA_DATA0              ; High byte of X position
+    lda player_sprite_y_l       ; Write Y position (16-bit)
+    sta VERA_DATA0              ; Low byte of Y position
+    lda player_sprite_y_h 
+    stz VERA_DATA0              ; High byte of Y position
+    lda #%00001100              ; zlevel, sprite in from of layer1
     sta VERA_DATA0 
-    lda #%01010011  ; 16x16 , paletter offset 01
+    lda #%01010011              ; 16x16 , paletter offset 01
     sta VERA_DATA0 
-
-    stz VERA_CTRL        ; Set DCSEL to 0
-    lda #%01110001 ; enable sprites, layer 1, layer 0, and output mode to VGA
+    stz VERA_CTRL               ; Set DCSEL to 0
+    lda #%01110001              ; enable sprites, layer 1, layer 0, and output mode to VGA
     sta VERA_DC_VIDEO 
 
     ; Initialize game variables
-    lda #SPACE_DELAY ; initialize our paralax counter
+    lda #SPACE_DELAY            ; initialize our paralax counter
     sta parallax_scroll_delay 
-
     rts 
+
+
+
+
 
 clear_screen:
     lda #$00
-    stz VERA_CTRL           ; Set DCSEL to 0
-    MACRO_VERA_SET_ADDR $0E000, 1 ; Start at VRAM address $0E000
+    stz VERA_CTRL                   ; Set DCSEL to 0
+    MACRO_VERA_SET_ADDR $0E000, 1   ; Start at VRAM address $0E000
     ldx #0
 @clear_loop:
-    sta VERA_DATA0       ; Write 0 to clear the screen
-    inx
-    bne @clear_loop       ; Loop until the entire screen is cleared
-    rts
+    sta VERA_DATA0                  ; Write 0 to clear the screen
+    inx 
+    bne @clear_loop                 ; Loop until the entire screen is cleared
+    rts 
+
+
+
 
 ; ------------------------------------ End of Game Subroutines
