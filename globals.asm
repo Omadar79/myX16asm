@@ -38,7 +38,7 @@ VRAM_TILEMAP        = $17800 ; 128x128 tilemap
 VRAM_STARTSCRN      = $1F000 ; 64x32 tilemap
 VRAM_SPRITE_ATTR    = $1FC00 ; sprite 0 attribute table
 
-
+SPRITE_SIZE = 16 * 16 / 2 ; 4bpp 16x16 sprite
 
 ;--------------------------------- Variables -------------------------------------------------------
 ; (fractional numbers 192 = 0.75, 128 = 0.5 , 64 = 0.25 , 32 = 0.125 , etc)
@@ -50,8 +50,8 @@ player_sprite_y_l:          .byte 0       ; Low byte of Y position
 player_sprite_y_h:          .byte 0        ; High byte of Y position, don't really use this other than address loading
 player_speed_x:             .byte 2
 player_speed_y:              .byte 2
-;player_speed_frac:         .byte 128      ; factional part of peed in pixels 
-;player_direction:            byte 0        ; 0 = no move, 1 = right, 2 = left, 3 = up, 4 = down
+
+
 player_sprite_index:        .byte 0        ; sprite index in VERA
 default_irq_vector:         .addr 0
 

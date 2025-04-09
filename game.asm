@@ -24,6 +24,7 @@
 
 ZP_PTR_DIR = $28 ; ZP pointer for direction  0 = no move, 1 = right, 2 = left, 3 = up, 4 = down
 
+
      ;||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
      ;|       $9F29******* Display Composer (DC_Video) ***********
      ;|        |CNTRFDL|SPRT|L1|L0|NTCS/RGB|NTSC/Ch| OUT_MODE |
@@ -144,6 +145,7 @@ game_tick_loop:
     beq @tick_done           ; if no move then skip to done move player
     jsr movePlayer_tick       
 @tick_done:
+    jsr update_player_sprite 
     rts 
 
 custom_irq_handler:
@@ -220,6 +222,7 @@ parallax_tick:
 ;||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 input_tick:                     ; Read joystick state
     stz ZP_PTR_DIR              ; reset player direction to 0 (no move)
+    stz player_sprite_index      ; reset player sprite index to 0 (no move)
     jsr JOYSTICK_SCAN           ; Scan the joystick but this might depend on default IRQ vector
     lda #1                      ; joystick 1
     jsr JOYSTICK_GET            ; check the first joystick 
@@ -299,7 +302,7 @@ movePlayer_tick:   ; Move the sprite by player speed and directio
     sta player_sprite_y_l     
     lda VERA_DATA0              ; Read high byte of Y position
     sta player_sprite_y_h 
-
+    
     ldy ZP_PTR_DIR 
     cpy #1
     beq @move_x_positive    ; +X
@@ -309,9 +312,12 @@ movePlayer_tick:   ; Move the sprite by player speed and directio
     beq @move_y_negative    ; +Y
     cpy #4
     beq @move_y_positive    ; -Y
+
     rts 
 
 @move_x_positive:
+    lda #8                      ; Frame 2 for moving right
+    sta player_sprite_index 
     lda player_sprite_x_l 
     clc 
     adc player_speed_x           
@@ -322,6 +328,8 @@ movePlayer_tick:   ; Move the sprite by player speed and directio
     bra @write_position
 
 @move_x_negative:
+    lda #4                      ; Frame 1 for moving left
+    sta player_sprite_index 
     lda player_sprite_x_l 
     sec 
     sbc player_speed_x             
@@ -349,10 +357,12 @@ movePlayer_tick:   ; Move the sprite by player speed and directio
     lda player_sprite_y_h 
     sbc #0         
     sta player_sprite_y_h 
-    bra @write_position
+    rts 
+    ;bra @write_position
 
 @write_position:                    ; Write updated position back to VRAM
     jsr check_boundaries  
+
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda VERA_DATA0 
     lda VERA_DATA0 
@@ -422,6 +432,33 @@ check_boundaries:
 @done_y_min:
 @doneboundry:
     rts
+
+update_player_sprite:
+    ; Calculate the VRAM address of the sprite frame
+  
+    lda #< (VRAM_SPRITES >> 5)
+    clc 
+    adc player_sprite_index 
+    sta ZP_PTR_1 
+    lda #> (VRAM_SPRITES >> 5)
+    adc #0                      ; Add carry from low byte addition
+    sta ZP_PTR_1 + 1  ; Add the offset for the sprite frame
+       
+
+    MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
+    lda ZP_PTR_1                ; Write low byte of sprite frame address
+    sta VERA_DATA0 
+    lda ZP_PTR_1 + 1            ; Write high byte of sprite frame address
+    sta VERA_DATA0 
+    lda player_sprite_x_l                   ; Write low byte of X
+    sta VERA_DATA0  
+    lda player_sprite_x_h              ; Write high byte of X
+    sta VERA_DATA0  
+    lda player_sprite_y_l                  ; Write low byte of Y
+    sta VERA_DATA0  
+    lda player_sprite_y_h               ; Write high byte of Y
+    sta VERA_DATA0  
+    rts 
 gameplay_init:
                                     ; Setup tiles on layer 0
     lda #LAYERCONFIG_32x324BPP 
