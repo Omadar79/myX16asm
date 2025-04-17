@@ -431,7 +431,7 @@ check_boundaries:
     sta player_sprite_y_h
 @done_y_min:
 @doneboundry:
-    rts
+    rts 
 
 update_player_sprite:
     ; Calculate the VRAM address of the sprite frame
@@ -475,7 +475,7 @@ gameplay_init:
     ; configure layer 1: 
     lda #LAYERCONFIG_32x324BPP 
     sta VERA_L1_CONFIG 
-    lda #(VRAM_TILEMAP >> 9 )
+    lda #(VRAM_PARALLAXMAP >> 9 )
     sta VERA_L1_MAPBASE 
     lda #(VRAM_TILES >> 9 ) 
     sta VERA_L1_TILEBASE 
@@ -506,7 +506,7 @@ gameplay_init:
     stz VERA_DATA0              ; High byte of Y position
     lda #%00001100              ; zlevel, sprite in from of layer1
     sta VERA_DATA0 
-    lda #%01010011              ; 16x16 , paletter offset 01
+    lda #%01010000              ; 16x16 , paletter offset 00
     sta VERA_DATA0 
     stz VERA_CTRL               ; Set DCSEL to 0
     lda #%01110001              ; enable sprites, layer 1, layer 0, and output mode to VGA

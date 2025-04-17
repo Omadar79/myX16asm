@@ -31,12 +31,11 @@ SPACE_DELAY       = 16  ; Parallax Scrolling
 ; Game Asset Location - VRAM Addresses
 
 VRAM_TILES          = $00000 ; 227 4bpp 16x16 tiles (may also be used as sprite frames)
-; VRAM_LOADMAP        = $07800 ; 32x32 tilemap
-VRAM_SPRITES        = $08000 ; 192 4bpp 16x16 frames
+VRAM_SPRITES        = $08000 ;  4bpp 16x16 sprite frames  0-2 spaceshipt, 3-4 flame/jet 08C00-9000
 VRAM_BITMAP         = $0E000 ; 4bpp 320x240 bitmap
-VRAM_TILEMAP        = $17800 ; 128x128 tilemap
-VRAM_STARTSCRN      = $1F000 ; 64x32 tilemap
-VRAM_SPRITE_ATTR    = $1FC00 ; sprite 0 attribute table
+VRAM_TILEMAP        = $17800 ; 32x32 tilemap
+VRAM_PARALLAXMAP     = $18000 ; 32x32 tilemap
+VRAM_SPRITE_ATTR    = $1FC00 ; sprite 0 attribute table, 1FD00 sprite 1 attribute table
 
 SPRITE_SIZE = 16 * 16 / 2 ; 4bpp 16x16 sprite
 
