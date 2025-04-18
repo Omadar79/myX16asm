@@ -20,40 +20,37 @@
 .include "zsound.inc"
 .include "filestovram.asm"
 .include "globals.asm"
-;.include "sprites.asm"
-
-ZP_PTR_DIR = $28 ; ZP pointer for direction  0 = no move, 1 = right, 2 = left, 3 = up, 4 = down
 
 
-     ;||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
-     ;|       $9F29******* Display Composer (DC_Video) ***********
-     ;|        |CNTRFDL|SPRT|L1|L0|NTCS/RGB|NTSC/Ch| OUT_MODE |
-     ;|            CNTRFDL 0 = Interlaced, 1 = Progressive
-     ;|            SPRT = Enable Sprites | L1 = Enable Layer 1 ;| L0 = Enable Layer 0
-     ;|            NTCS/RGB 0 = NTSC, 1 = RGB | NTSC/Ch 0 = NTSC, 1 = PAL 
-     ;|            OUT_MODE 0 = Video Disabled, 1 = VGA, 2 = NTSC(Compos/S-video), 3 = RGB 15hz
-     ;|      
-     ;|              31 = 0011|0001               71 = 01110001
-     ;|            ORA40 = 0100|0000 = Enable Sprites
-     ;|            ORA20 = 0010|0000 = Enable Layer 1
-     ;|            ORA10 = 0001|0000 = Enable Layer 0
-     ;|            ORA70 = 0111|0001 = Enable Sprites, Layer 1, Layer 0
-     ;|      
-     ;|       $9F2D LO / 9F34 L1  *********Layer Config ***********
-     ;|        |MAP_H | MAP_W | T256 |BMP MODE| COLOR DEPTH |
-     ;|             MAP_H/MAP_W 0 = 32,1 = 64,2 = 128,3 = 256
-     ;|             BMP MODE 0 = Text/Tile, 1 = Bitmap
-     ;|             T256 0 = 16 color, 1 = 256 color
-     ;|             COLOR DEPTH 0 = 1bpp, 2 = 4bpp, 3 = 8bpp
-     ;|      
-     ;|       $9F2E LO / 9F35 L1  *****Layer Map Base **************
-     ;|        |tile map start address >> 9 |
-     ;|      
-     ;|      $9F2F LO / 9F36 L1  *****Layer Tile Base *************
-     ;|        | tile graphic base address >> 11 | TILE_H | TILE_W |
-     ;|               TILE_H 0 = 8pixel, 1 = 16pixel 
-     ;|               TILE_W 0 = 8pixel, 1 = 16pixel
-     ;||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
+;|       $9F29******* Display Composer (DC_Video) ***********
+;|        |CNTRFDL|SPRT|L1|L0|NTCS/RGB|NTSC/Ch| OUT_MODE |
+;|            CNTRFDL 0 = Interlaced, 1 = Progressive
+;|            SPRT = Enable Sprites | L1 = Enable Layer 1 ;| L0 = Enable Layer 0
+;|            NTCS/RGB 0 = NTSC, 1 = RGB | NTSC/Ch 0 = NTSC, 1 = PAL 
+;|            OUT_MODE 0 = Video Disabled, 1 = VGA, 2 = NTSC(Compos/S-video), 3 = RGB 15hz
+;|      
+;|              31 = 0011|0001               71 = 01110001
+;|            ORA40 = 0100|0000 = Enable Sprites
+;|            ORA20 = 0010|0000 = Enable Layer 1
+;|            ORA10 = 0001|0000 = Enable Layer 0
+;|            ORA70 = 0111|0001 = Enable Sprites, Layer 1, Layer 0
+;|      
+;|       $9F2D LO / 9F34 L1  *********Layer Config ***********
+;|        |MAP_H | MAP_W | T256 |BMP MODE| COLOR DEPTH |
+;|             MAP_H/MAP_W 0 = 32,1 = 64,2 = 128,3 = 256
+;|             BMP MODE 0 = Text/Tile, 1 = Bitmap
+;|             T256 0 = 16 color, 1 = 256 color
+;|             COLOR DEPTH 0 = 1bpp, 2 = 4bpp, 3 = 8bpp
+;|      
+;|       $9F2E LO / 9F35 L1  *****Layer Map Base **************
+;|        |tile map start address >> 9 |
+;|      
+;|      $9F2F LO / 9F36 L1  *****Layer Tile Base *************
+;|        | tile graphic base address >> 11 | TILE_H | TILE_W |
+;|               TILE_H 0 = 8pixel, 1 = 16pixel 
+;|               TILE_W 0 = 8pixel, 1 = 16pixel
+;||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
 ; ------------------------------------ Initialize the game ----------------------------------------
 start_game:
@@ -114,13 +111,10 @@ init_irq:
     stz VERA_CTRL               ; Set DCSEL to 0
     lda #%00010001              ; enable layer 0, and output mode to VGA
     sta VERA_DC_VIDEO 
-;------------------------------------ Start Screen Loop ----------------------------------------------------
-startscreen_loop:
-    ; ------- Start Screen Loop, we might put loading logic behind the scenes
-    jsr SCNKEY                  ; Read a character from the keyboard
-    cmp #$00                    ; Check if no key is pressed
-    beq startscreen_loop        ; Loop until a key is pressed
-    jsr gameplay_init 
+
+    lda #GAME_STATE_START_SCREEN ; Set game state to start screen
+    sta game_state 
+
     
 ;------------------------------------ Main Game Loop ----------------------------------------------------
 @main_game_loop:
@@ -128,9 +122,8 @@ startscreen_loop:
     ;lda vsync_trig
     bra @main_game_loop         ; loop indefinately 
 
-;------------------------------------ Game Subroutines ------------------------------------------------------
-game_tick_loop:
-    ;-------  game tick fires every 60th of a second
+
+game_tick_loop: ;-------  game tick fires every 60th of a second 
     inc frame_num               ; increment frame counter
     lda frame_num 
     cmp #60    
@@ -138,16 +131,72 @@ game_tick_loop:
     lda #0                      ; on frame 60 we reset the frame counter 
     sta frame_num               ; and still run the last tick code
 @tick:                          ; code to run every frame aka 1/60 second
+    lda #0                      ; reset the frame state change boolean 
+    sta ZP_PTR_4                ; we can change to 1 if a state change happens
+    lda game_state  
+    cmp #GAME_STATE_START_SCREEN 
+    beq @handle_startscreen_tick 
+    lda ZP_PTR_4
+    cmp #1 
+    beq @tick_done             ; if a state was changed lets finish this frame
+    lda game_state              
+    cmp #GAME_STATE_IN_GAME 
+    beq @handle_ingame_tick 
+    lda ZP_PTR_4
+    cmp #1 
+    beq @tick_done             ; if a state was changed lets finish this frame
+    lda game_state              
+    cmp #GAME_STATE_PAUSED 
+    beq @handle_paused 
+    ;lda ZP_PTR_4
+    ;cmp #1 
+    ;beq @tick_done             ; if a state was changed lets finish this frame
+    ;lda game_state              
+    ;cmp #GAME_STATE_GAME_OVER 
+    ;beq @handle_game_over 
+@tick_done:
+    rts 
+
+@handle_ingame_tick:
     jsr parallax_tick 
     jsr input_tick 
     lda ZP_PTR_DIR 
     cmp #0
-    beq @tick_done           ; if no move then skip to done move player
-    jsr movePlayer_tick       
-@tick_done:
+    beq @ingame_tick          ; if no move then skip to done move player
+    jsr movePlayer_tick    
+@ingame_tick:
     jsr update_player_sprite 
     rts 
+;------------------------------------ Start Screen Loop ----------------------------------------------------
+@handle_startscreen_tick:
+    ;// draw pause screen here? or after pause in ingame state?
+    jsr SCNKEY                   ; Read a character from the keyboard
+    cmp #$00                     ; Check if no key is pressed
+    beq @startscreen_finish_tick ; Loop until a key is pressed
+    ;if we do continue change state and initialize next game state
+    lda #GAME_STATE_IN_GAME      ; Set game state to in-game
+    sta game_state 
+    lda #1
+    sta ZP_PTR_4                 ; set a 1 to we change state this frame
+    jsr gameplay_init            ; Initialize the game for the next state
+@startscreen_finish_tick:
+    rts 
 
+@handle_paused:
+    jsr SCNKEY                   ; Read a character from the keyboard
+    cmp #$1B                     ; Check if no key is pressed
+    bne @pause_finish_tick       ; Loop until unpause key is pressed
+    lda #GAME_STATE_IN_GAME      ; Set game state to in-game
+    sta game_state 
+    lda #1
+    sta ZP_PTR_4                 ; set a 1 to we change state this frame
+    jsr gameplay_init          
+@pause_finish_tick:
+    rts 
+
+
+
+;------------------------------------ Other Game Subroutines ------------------------------------------------------
 custom_irq_handler:
     ;------- Custom IRQ Handler that still allows the Kernal IRQ to run at the end of vsync
     lda #%00000010              ; Check for scanline IRQ
@@ -159,7 +208,7 @@ custom_irq_handler:
     jsr game_tick_loop 
 @done_vsync:                    ; continue to default IRQ handler backed up earlier
    jmp (default_irq_vector)     ; RTI will happen after jump
-custom_irq_scanline_handler:        ; Line IRQ Handler ties to the VERA line IRQ
+custom_irq_scanline_handler:    ; Line IRQ Handler ties to the VERA line IRQ
     sta VERA_ISR                ; Acknowledge the line IRQ 
 	; jsr PCM_PLAY
     ; jsr ZSM_PLAYIRQ
@@ -168,8 +217,7 @@ custom_irq_scanline_handler:        ; Line IRQ Handler ties to the VERA line IRQ
 	pla                         ; in order to maintain the stack and registers properly.
 	rti 
 
-parallax_tick:
-                                ; Scroll the background
+parallax_tick:                  ; Scroll the background
                                 ; scroll ground (layer 1)
     lda VERA_L1_VSCROLL_L 
     clc 
@@ -234,7 +282,6 @@ input_tick:                     ; Read joystick state
     sta joystick_state          ; save the current state of the joystick from JOYSTICK_GET
     eor joystick_latch          ; exclusive OR the last state to check for button state changes
     sta joystick_latch          ; save this for next time to see state changes
-    ;@check_updown_dpad:       ; check and perform up and down DPAD buttons
     lda joystick_state          ; pull back in the current state
     bit #%00001000              ; bitwise AND to check for UP button (ie A register bit 3 being 0)
     beq @perform_up_dpad        ; if UP button pressed we don't want to check down incase it's also being pressed somehow
@@ -270,25 +317,30 @@ input_tick:                     ; Read joystick state
     ;bra @check_start_btn      ; commented out to allow it to fall through to check start button
 
 @check_start_btn:               ; check and perform start button 
-   bit #%00010000               ; bitwise AND to check for start button (ie A register bit 4 being 0)    
-   bne @check_select_btn        ; button is not pressed so skip to check select button  
-   lda joystick_latch           ; button is pressed but is it a new press?  Check the cache latch state
-   bit #%00010000               ; bitwise AND to check for start button (ie A register bit 4 being 0)  
-   beq @check_select_btn        ; if not a new press then skip to check select button
-;TODO code to perform when start button pressed
-
+    bit #%00010000               ; bitwise AND to check for start button (ie A register bit 4 being 0)    
+    bne @check_select_btn        ; button is not pressed so skip to check select button  
+    lda joystick_latch           ; button is pressed but is it a new press?  Check the cache latch state
+    bit #%00010000               ; bitwise AND to check for start button (ie A register bit 4 being 0)  
+    beq @check_select_btn        ; if not a new press then skip to check select button
+    ;Start button pressed, pause game
+    lda #GAME_STATE_PAUSED      ; Set game state to PAUSE if start button pressed
+    sta game_state 
+    lda #1
+    sta ZP_PTR_4                 ; set a 1 as we changed state this frame
+    jsr pause_init
+    bra @latch                   ; skip to latch state
 @check_select_btn:              ; check and perform select button 
-   lda joystick_state           ; pull back in the current state
-   bit #%00100000               ; bitwise AND to check for select button (ie A register bit 5 being 0) 
-   bne @latch                   ; button is not pressed so skip to end
-   lda joystick_latch           ; button is pressed but is it a new press?  Check the cache state
-   bit #%00100000               ; bitwise AND to check for select button (ie A register bit 5 being 0) in the cache
-   beq @latch 
+    lda joystick_state           ; pull back in the current state
+    bit #%00100000               ; bitwise AND to check for select button (ie A register bit 5 being 0) 
+    bne @latch                   ; button is not pressed so skip to end
+    lda joystick_latch           ; button is pressed but is it a new press?  Check the cache state
+    bit #%00100000               ; bitwise AND to check for select button (ie A register bit 5 being 0) in the cache
+    beq @latch 
 ;TODO code to perform when select button pressed
 @latch:
-   lda joystick_state 
-   sta joystick_latch 
-   rts 
+    lda joystick_state 
+    sta joystick_latch 
+    rts 
 
 movePlayer_tick:   ; Move the sprite by player speed and directio                           
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
@@ -514,12 +566,13 @@ gameplay_init:
 
     ; Initialize game variables
     lda #SPACE_DELAY            ; initialize our paralax counter
-    sta parallax_scroll_delay 
+    sta parallax_scroll_delay    
     rts 
 
-
-
-
+pause_init:
+    ;MACRO_TEXT_OVERLAY  "Paused - Press ESC to Resume", 20 , 20  
+    MACRO_PRINT_STRING "Paused - Press ESC to Resume"
+    rts 
 
 clear_screen:
     lda #$00
