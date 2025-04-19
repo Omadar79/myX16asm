@@ -192,4 +192,18 @@ ZP_PTR_3          = $24
 ZP_PTR_4          = $26
 
 
+; Game Asset Location - VRAM Addresses
+
+VRAM_TILES             = $00000 ; 227 4bpp 16x16 tiles (may also be used as sprite frames)
+VRAM_SPRITES           = $08000 ; 4bpp 16x16 sprite frames  0-2 spaceshipt, 3-4 flame/jet 08C00-9000
+VRAM_BITMAP            = $0E000 ; 4bpp 320x240 bitmap
+VRAM_TILEMAP           = $17800 ; 32x32 tilemap
+VRAM_PARALLAXMAP       = $18000 ; 32x32 tilemap
+VRAM_TEXTMAP           = $1B000     ; Reserve 2K for text overlay (32x32 = 2048 bytes)
+VRAM_PETSCII           = $1F000 
+VRAM_PALETTE           = $1FA00 
+VRAM_SPRITE_ATTR       = $1FC00 ; sprite 0 attribute table, 1FD00 sprite 1 attribute table
+VRAM_PSG               = $1F9C0 ; Programmable Sound Generator (PSG) registers
+
+
 .endif

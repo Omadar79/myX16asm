@@ -13,6 +13,7 @@ GLOBALS_INC = 1
 ZP_PTR_DIR      = $28 ; ZP pointer for direction  0 = no move, 1 = right, 2 = left, 3 = up, 4 = down
 ZP_GAME_STATE   = $2A
 
+ZP_DID_STATE_CHANGE = $2C ; 0 = no state change, 1 = state change
 
 
 ;------------------------------------ Constants
@@ -38,19 +39,6 @@ SCREEN_MAX_X_H           = $01
 
 SPACE_DELAY             = 16  ; Parallax Scrolling
 
-; Game Asset Location - VRAM Addresses
-
-VRAM_TILES             = $00000 ; 227 4bpp 16x16 tiles (may also be used as sprite frames)
-VRAM_SPRITES           = $08000 ; 4bpp 16x16 sprite frames  0-2 spaceshipt, 3-4 flame/jet 08C00-9000
-VRAM_BITMAP            = $0E000 ; 4bpp 320x240 bitmap
-VRAM_TILEMAP           = $17800 ; 32x32 tilemap
-VRAM_PARALLAXMAP       = $18000 ; 32x32 tilemap
-VRAM_PETSCII           = $1F000 
-VRAM_PALETTE           = $1FA00 
-VRAM_SPRITE_ATTR       = $1FC00 ; sprite 0 attribute table, 1FD00 sprite 1 attribute table
-VRAM_PSG               = $1F9C0 ; Programmable Sound Generator (PSG) registers
-
-
 SPRITE_SIZE             = 16 * 16 / 2 ; 4bpp 16x16 sprite
 
 GAME_STATE_LOADING      = $00
@@ -60,8 +48,9 @@ GAME_STATE_PAUSED       = $03
 
 ;--------------------------------- Variables -------------------------------------------------------
 
-game_state = ZP_GAME_STATE
-
+game_state = ZP_GAME_STATE 
+has_state_changed = ZP_DID_STATE_CHANGE 
+player_xy_state = ZP_PTR_DIR 
 ; (fractional numbers 192 = 0.75, 128 = 0.5 , 64 = 0.25 , 32 = 0.125 , etc)
 parallax_scroll_delay:      .byte 0
 frame_num:                  .byte 0
@@ -70,15 +59,12 @@ player_sprite_x_h:          .byte 0        ; High byte of X position
 player_sprite_y_l:          .byte 0       ; Low byte of Y position
 player_sprite_y_h:          .byte 0        ; High byte of Y position, don't really use this other than address loading
 player_speed_x:             .byte 2
-player_speed_y:              .byte 2
-
+player_speed_y:             .byte 2
 player_sprite_index:        .byte 0        ; sprite index in VERA
 default_irq_vector:         .addr 0
 
-joystick_state:             .byte 0
-joystick_latch:             .byte $CF
 
-pause_message:          .byte "Paused - Press ESC or the Start Button to Resume", $00
+pause_message:          .byte "GAME PAUSED PRESS ESC TO RESUME", 0
 
 
 

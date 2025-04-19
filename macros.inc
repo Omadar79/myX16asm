@@ -5,6 +5,7 @@
 ;////////////////////////////////////////////////////////////
 .include "x16.inc"
 
+
 .ifndef MACROS_INC 
 MACROS_INC = 1
 
@@ -14,7 +15,7 @@ textoverlay_buffer:         .byte 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 textoverlay_length:         .byte 0
 textoverlay_bank:           .byte 0
 textoverlay_address:        .word 0
-textoverlay_clipboard:       .word 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+textoverlay_clipboard:      .word 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
 ; ------------------- Set VERA address pointer to RAM address with stride for iteration-------------------
 ;       Stride - 1 byte, 2 bytes, 4 bytes, 8 bytes, 16 bytes, 32 bytes, 64 bytes, 128 bytes
@@ -89,126 +90,145 @@ textoverlay_clipboard:       .word 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
     .endscope 
 .endmacro
 
-
+; ---------------------------------------------------------------
+; MACRO_PRINT_OVERLAY - Displays text string over existing graphics
+; Parameters:
+;   string: The string to display
+;   x_pos: X position (0-39 for 40 column mode)
+;   y_pos: Y position (0-29 for normal display)
+; ---------------------------------------------------------------
 .macro MACRO_PRINT_STRING mystring 
-    .scope 
-        jmp end_string 
-    string_begin: .byte mystring 
-    end_string:
-        lda #<string_begin 
-        sta ZP_PTR_1 
-        lda #>string_begin 
-        sta ZP_PTR_1 + 1
-        ldx #(end_string - string_begin)
-        ldy #0
-
-    loop:
-        lda (ZP_PTR_1) , y
-        jsr CHROUT 
-        iny 
-        dex 
-        bne loop 
-   .endscope 
-.endmacro
-
-.macro MACRO_TEXT_OVERLAY mystring, xloc, yloc 
-   .scope
-         jmp end_string
-      string_start: .asciiz mystring 
-      end_string: 
-         lda #<string_start 
-         sta ZP_PTR_1 
-         lda #>string_start 
-         sta ZP_PTR_1 + 1
-         lda #<textoverlay_buffer 
-         sta ZP_PTR_2 
-         lda #>textoverlay_buffer 
-         sta ZP_PTR_2 + 1
-         ldx #(end_string - string_begin -1)
-         ldy #0
-      loop:
-         lda (ZP_PTR_1) , y
-         sta (ZP_PTR_2) , y
-         iny 
-         dex 
-         bne loop 
-         lda #1 
-         ldx #xloc  
-         ldy #yloc  
-         jsr xy2vaddr 
-         sta textoverlay_bank 
-         lda #$10
-         ora textoverlay_bank 
-         sta textoverlay_bank 
-         lda #(end_string - string_begin - 1 )
-         jsr __superimpose 
-   .endscope
-.endmacro
-
-
-.macro MACRO_superimpose_args2veraloop 
     .scope
-        stz VERA_CTRL 
-        lda textoverlay_bank 
+        ; Save the current VERA state
+        lda VERA_CTRL 
+        pha 
+        lda VERA_DC_VIDEO 
+        pha 
+        
+        ; Configure Layer 1 for text mode
+        lda #%00000000          ; 1bpp text mode, 32x32 map
+        sta VERA_L1_CONFIG 
+        lda #(VRAM_PETSCII>> 9); Set tile base to PETSCII font
+        sta VERA_L1_TILEBASE 
+        lda #(VRAM_TEXTMAP >> 9); Set map base for our text
+        sta VERA_L1_MAPBASE 
+        
+        ; Clear the text overlay first
+        MACRO_CLEAR_TEXT_OVERLAY 
+
+        ; Set VERA address
+        stz VERA_CTRL           ; Select Data Port 0
+        lda #((VRAM_TEXTMAP >> 16) | $10)  ; Bank and stride=1
         sta VERA_ADDR_BANK 
-        stx VERA_ADDR_LOW 
-        sty VERA_ADDR_HIGH 
-        ldy #0               ; Y = tilemap address offset
-        lda textoverlay_length 
-        clc 
-        adc textoverlay_length 
-        tax                  ; X = 2 x string length
-        lda #<textoverlay_clipboard 
-        sta ZP_PTR_1         ; ZP_PTR_1 = clipboard
-        lda #>textoverlay_clipboard 
-        sta ZP_PTR_1 + 1 
+        lda #>(VRAM_TEXTMAP + 1024)  ; Center vertically (roughly)
+        sta VERA_ADDR_HIGH
+        lda #<(VRAM_TEXTMAP + 1024)  ; Center vertically (roughly)
+        sta VERA_ADDR_LOW
+        
+        
+        ; Write the string
+        ldx #0
+    loop: 
+        lda mystring, x          ; Load character
+        beq done                 ; If zero, end of string
+        sta VERA_DATA0           ; Write character
+        lda #01                   ; White text on transparent
+        sta VERA_DATA0           ; Write color
+        inx 
+        bne loop                ; Loop if not zero
+    done:
+        ; Restore VERA state
+        pla 
+        sta VERA_DC_VIDEO 
+        pla 
+        sta VERA_CTRL 
+    .endscope 
+.endmacro
+
+; ---------------------------------------------------------------
+; MACRO_CLEAR_TEXT_OVERLAY - Clears the text overlay layer
+; No parameters needed
+; ---------------------------------------------------------------
+.macro MACRO_CLEAR_TEXT_OVERLAY
+    .scope
+        ; Set VERA address to start of text map
+        stz VERA_CTRL           ; Select Data Port 0
+        lda #((VRAM_TEXTMAP >> 16) | $10)  ; Bank and stride=1
+        sta VERA_ADDR_BANK 
+        lda #>VRAM_TEXTMAP 
+        sta VERA_ADDR_HIGH 
+        lda #<VRAM_TEXTMAP 
+        sta VERA_ADDR_LOW 
+        ; Clear 32x32 text area (2048 bytes = 1024 characters with colors)
+        ldx #4                  ; 4 pages of 256 bytes = 1024 bytes
+        lda #32                  ; Space character
+    page_loop:
+        ldy #0                  ; 256 bytes per page
+    byte_loop:
+        sta VERA_DATA0          ; Clear character
+        sta VERA_DATA0          ; Clear color
+        dey 
+        bne byte_loop
+        dex 
+        bne page_loop
     .endscope
 .endmacro
 
-
-__superimpose: ; A: string length (max = 20)
-               ; X/Y: tilemap address
-               ; __superimpose_bank: tilemap bank
-               ; __superimpose_string: string to superimpose
-   sta textoverlay_length 
-   stx textoverlay_address 
-   sty textoverlay_address + 1
-   MACRO_superimpose_args2veraloop 
-@readloop:              ; store tiles to clipboard
-   txa 
-   beq @write
-   lda VERA_DATA0 
-   sta (ZP_PTR_1) , y
-   iny 
-   dex 
-   jmp @readloop
-@write:
-   lda textoverlay_address + 1
-   sta VERA_ADDR_HIGH 
-   lda textoverlay_address 
-   sta VERA_ADDR_LOW 
-   lda #<textoverlay_buffer 
-   sta ZP_PTR_1         ; ZP_PTR_1 = string
-   lda #>textoverlay_buffer 
-   sta ZP_PTR_1 + 1 
-   ldx textoverlay_length   ; X = string length
-   ldy #0               ; Y = string index
-@writeloop:             ; write character tiles to tilemap
-   txa 
-   beq @end 
-   lda (ZP_PTR_1) , y
-   cmp #ASCII_SPACE 
-   bne @store_char 
-   lda #0               ; replace spaces with blank tiles
-@store_char:
-   sta VERA_DATA0       ; store character tile
-   lda #0
-   sta VERA_DATA0       ; store tile control (PO 0, no flip)
-   iny 
-   dex 
-   jmp @writeloop
-@end:
-   rts 
+; ---------------------------------------------------------------
+; MACRO_PRINT_STRING - Writes text directly to the current tilemap
+; Parameters:
+;   string: The string to display
+;   x_pos: X position in tiles
+;   y_pos: Y position in tiles
+; ---------------------------------------------------------------
+.macro MACRO_PRINT_STRING_TOP string, x_pos, y_pos
+    .scope
+        ; Calculate tilemap position (32 tiles per row)
+        lda #y_pos 
+        asl                     ; × 2
+        asl                     ; × 4
+        asl                     ; × 8
+        asl                     ; × 16
+        asl                     ; × 32
+        sta ZP_PTR_1            ; Store low byte
+        lda #0
+        rol                     ; Get any carry from shifts
+        sta ZP_PTR_1 + 1        ; Store high byte
+        
+        ; Add X position
+        lda #x_pos 
+        asl                     ; × 2 (each tile entry is 2 bytes)
+        clc 
+        adc ZP_PTR_1 
+        sta ZP_PTR_1 
+        lda ZP_PTR_1 + 1
+        adc #0
+        sta ZP_PTR_1 + 1
+        
+        ; Set VERA address to correct tilemap position
+        stz VERA_CTRL           ; Select Data Port 0
+        lda #((VRAM_TILEMAP >> 16) | $10)  ; Bank and stride=1
+        sta VERA_ADDR_BANK 
+        lda ZP_PTR_1 + 1         ; High byte of position
+        clc 
+        adc #>VRAM_TILEMAP 
+        sta VERA_ADDR_HIGH 
+        lda ZP_PTR_1            ; Low byte of position
+        sta VERA_ADDR_LOW 
+        
+        ; Write the string
+        ldx #0
+    loop:
+        lda string,x           ; Load character
+        beq done               ; If zero, end of string
+        sta VERA_DATA0         ; Write tile index
+        lda #%00000001         ; Palette offset 0, no flip
+        sta VERA_DATA0         ; Write tile attributes
+        inx 
+        bne loop               ; Loop if not zero
+    done:
+    .endscope
+.endmacro
 
 .macro MACRO_PRING_CRLF 
     .scope 
