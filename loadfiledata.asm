@@ -1,5 +1,10 @@
-.ifndef LOADDATA_INC 
-LOADDATA_INC = 1
+; ===================================================================
+; File:         loadfiledata.asm
+; Programmer:   Matt Heffernan modified by Dustin Taub
+; Description:  binary file loading, orignal code Matt Heffernan
+;===================================================================
+.ifndef LOADFILEDATA_ASM 
+LOADFILEDATA_ASM = 1
 
 .include "x16.inc"
 

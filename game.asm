@@ -1,6 +1,10 @@
 ; ===================================================================
 ; File:         game.asm
 ; Programmer:   Dustin Taub
+;
+; Resources: ZeroByteOrg ZSound Library for the Commander X16 
+;                       https://github.com/ZeroByteOrg/ZSound
+;
 ; Description:  This is where the entire game starts. 
 ;               -Initializes the game
 ;               -Loads the game assets
@@ -10,15 +14,17 @@
 
 .org $080D
 .segment "STARTUP"
+  
 .segment "INIT"
 .segment "ONCE"
 .segment "CODE"
     jmp start_game 
 
 .include "x16.inc"
+.include "zsmplayer.inc"
+.include "pcmplayer.inc"
 .include "macros.inc"
-.include "zsound.inc"
-.include "filestovram.asm"
+.include "loadfiledata.asm"
 .include "globals.asm"
 .include "input.asm"
 
@@ -55,68 +61,65 @@
 ;===================================================================
 ; Initialize the game
 ;===================================================================
-start_game:
-    ; ------- Load Game Assets From Files
-    ; load bitmap startscreen
+start_game:                     ; ------- Load Game Assets From Files
+
+    ;zsound player init
+    jsr init_player             ;zsound player init
+
+    ; load startscreen
     lda #> (VRAM_BITMAP >> 4 )
     ldx #< (VRAM_BITMAP >> 4 )
     ldy #< startscreen_fn 
     jsr loadtovram 
-
     ; load tiles
     lda #> (VRAM_TILES >> 4 )
     ldx #< (VRAM_TILES >> 4 )
     ldy #< tiles_fn 
     jsr loadtovram 
-
     ; load map
     lda #> (VRAM_TILEMAP >> 4 )
     ldx #< (VRAM_TILEMAP >> 4 )
     ldy #< tilemap_fn 
     jsr loadtovram 
-
+    ;load sprites
+    lda #>(VRAM_SPRITES >> 4 )
+    ldx #<(VRAM_SPRITES >> 4 )
+    ldy #<sprites_fn 
+    jsr loadtovram 
     ; Set the screen mode
-    lda #SCALE_320X240 ; SCALE320X240 
+    lda #SCALE_320X240          ; SCALE320X240 
     sta VERA_DC_HSCALE 
     sta VERA_DC_VSCALE  
-    
     ; configure layer 0 for background bitmaps
     lda #LAYERCONFIG_BITMP4BPP 
     sta VERA_L0_CONFIG 
     lda #(VRAM_BITMAP >> 9 )
     sta VERA_L0_TILEBASE 
-
     ; initial joystick state: Start & Select pressed
     lda #$CF
     sta joystick_latch 
-init_irq:
-    ; ------- IRQ Initializations 
+
+
+init_irq:                       ; ------- IRQ Initializations          
     sei                         ; disable IRQ while we're initializing our custom irq handler
     lda IRQVEC                  ; backup default IRQ vector
     sta default_irq_vector      ; save the default IRQ vector address low byte
     lda IRQVEC + 1 
     sta default_irq_vector + 1  ; save the default IRQ vector address high byte
-
     lda #< custom_irq_handler   ; reference our custom IRQ handler low byte
     sta IRQVEC                  ; set the IRQ vector to our custom handler low byte 
     lda #> custom_irq_handler   ; reference our custom IRQ handler high byte
     sta IRQVEC + 1              ; set the IRQ vector to our custom handler high byte
-
-    lda #%11111111              ; SET VERA LineIRQ to trigger on line 255.
+    lda #%11111111              ; SET VERA to trigger on line 255 aka vsync.
 	sta VERA_IRQLINE_L 
-
-    lda #%00000011              ; Set VERA to trigger on scan line and vysnc
+    lda #%00000011              ; Set VERA to trigger on scan line and vblank
     sta VERA_IEN 
-    cli                         ; enable IRQ now that vector is properly set
-
+    cli                         ; re-enable IRQ now that vector is properly set
     ; VERA initialize going into the start screen
-    stz VERA_CTRL               ; Set DCSEL to 0
-    lda #%00010001              ; enable layer 0, and output mode to VGA
-    sta VERA_DC_VIDEO 
-
+    jsr startscreen_init 
+   
     lda #GAME_STATE_START_SCREEN ; Set game state to start screen
     sta game_state 
-
     
 ;===================================================================
 ; Main Game Loop
@@ -126,9 +129,8 @@ init_irq:
     ;lda vsync_trig
     bra @main_game_loop         ; loop indefinately 
 
-
-game_tick_loop: ;-------  game tick fires every 60th of a second 
-    stz has_state_changed     ; Reset but we can change to 1 if a state change happens
+game_tick_loop:                 ;-------  game tick fires every 60th of a second 
+    stz has_state_changed       ; Reset but we can change to 1 if a state change happens
     inc frame_num               ; increment frame counter
     lda frame_num 
     cmp #60    
@@ -141,13 +143,13 @@ game_tick_loop: ;-------  game tick fires every 60th of a second
     beq @handle_startscreen_tick 
     lda has_state_changed 
     cmp #1 
-    beq @tick_done             ; if a state was changed lets finish this frame
+    beq @tick_done              ; if a state was changed lets finish this frame
     lda game_state              
     cmp #GAME_STATE_IN_GAME 
     beq @handle_ingame_tick 
     lda has_state_changed 
     cmp #1 
-    beq @tick_done             ; if a state was changed lets finish this frame
+    beq @tick_done              ; if a state was changed lets finish this frame
     lda game_state              
     cmp #GAME_STATE_PAUSED 
     beq @handle_paused_tick 
@@ -160,12 +162,13 @@ game_tick_loop: ;-------  game tick fires every 60th of a second
 @tick_done:
     rts 
 
+; Gameplay Screen Loop ----------------------------------------------------
 @handle_ingame_tick:
     jsr parallax_tick 
     jsr process_game_input 
-    lda ZP_PTR_DIR 
+    lda player_xy_state 
     cmp #0
-    beq @ingame_tick          ; if no move then skip to done move player
+    beq @ingame_tick            ; if no move then skip to done move player
     jsr movePlayer_tick    
 @ingame_tick:
     jsr update_player_sprite 
@@ -173,17 +176,9 @@ game_tick_loop: ;-------  game tick fires every 60th of a second
 
 ; Start Screen Loop ----------------------------------------------------
 @handle_startscreen_tick:
-    ;// draw pause screen here? or after pause in ingame state?
-    jsr SCNKEY                   ; Read a character from the keyboard
-    cmp #$00                     ; Check if no key is pressed
-    beq @startscreen_finish_tick ; Loop until a key is pressed
-    ;if we do continue change state and initialize next game state
-    lda #GAME_STATE_IN_GAME      ; Set game state to in-game
-    sta game_state 
-    lda #1
-    sta has_state_changed       ; set a 1 to we change state this frame
-    jsr gameplay_init            ; Initialize the game for the next state
-@startscreen_finish_tick:
+    jsr check_start_menu_input 
+    jsr update_player_sprite 
+
     rts 
 
 ; Pause Loop ------------------------------------------------------------
@@ -194,30 +189,33 @@ game_tick_loop: ;-------  game tick fires every 60th of a second
 ;===================================================================
 ; Custom IRQ Handler
 ;===================================================================
-custom_irq_handler:
-    ;------- Custom IRQ Handler that still allows the Kernal IRQ to run at the end of vsync
-    lda #%00000010              ; Check for scanline IRQ
+custom_irq_handler:             ;------- Custom IRQ Handler 
+                                ; still allows the Kernal IRQ to run at the end of vsync
+    lda #%00000010              ; Check for scanline 
 	and VERA_ISR 
-	bne custom_irq_scanline_handler 
+	bne irq_scanline_handler    ; if scanline then handle it
     lda VERA_ISR 
     and #%00000001              ; check for vsync IRQ
-    beq @done_vsync 
+    beq @vsync_done 
     jsr game_tick_loop 
-@done_vsync:                    ; continue to default IRQ handler backed up earlier
+@vsync_done:                    ; continue to default IRQ handler backed up earlier
    jmp (default_irq_vector)     ; RTI will happen after jump
-custom_irq_scanline_handler:    ; Line IRQ Handler ties to the VERA line IRQ
+irq_scanline_handler:           ; Line IRQ Handler , used for zsound
     sta VERA_ISR                ; Acknowledge the line IRQ 
-	; jsr PCM_PLAY
-    ; jsr ZSM_PLAYIRQ
-	ply                         ; Directly exit the IRQ, since the Kernal IRQ handler should only run once per frame
-	plx                         ; Pull the registers back from the stack
-	pla                         ; in order to maintain the stack and registers properly.
-	rti 
+	;jsr PCM_PLAY                ; play the zsound
+    jsr playmusic_IRQ            ; play the zsm music
+	ply                         ; restore the registers
+	plx                         ; off the stack
+	pla                         ; which would normally happen on a normal IRQ 
+	rti                         ; exit the IRQ 
+
+
+
 
 ;===================================================================
 ; Other Game Subroutines
 ;===================================================================
-parallax_tick:                   ; scroll front layer (layer 1)
+parallax_tick:                  ; scroll front layer (layer 1)
     lda VERA_L1_VSCROLL_L 
     clc 
     sbc #1
@@ -239,7 +237,7 @@ parallax_tick:                   ; scroll front layer (layer 1)
     sta parallax_scroll_delay 
     rts 
 
-movePlayer_tick:   ; Move the sprite by player speed and directio                           
+movePlayer_tick:                ; Move the sprite by player speed and direction                             
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda VERA_DATA0              ; skip past the first byte of the sprite attribute
     lda VERA_DATA0              ; skip past the second byte of the sprite attribute
@@ -252,16 +250,15 @@ movePlayer_tick:   ; Move the sprite by player speed and directio
     lda VERA_DATA0              ; Read high byte of Y position
     sta player_sprite_y_h 
     
-    ldy ZP_PTR_DIR 
+    ldy player_xy_state 
     cpy #1
-    beq @move_x_positive    ; +X
+    beq @move_x_positive        ; +X
     cpy #2
-    beq @move_x_negative    ; -X
+    beq @move_x_negative        ; -X
     cpy #3
-    beq @move_y_negative    ; +Y
+    beq @move_y_negative        ; +Y
     cpy #4
-    beq @move_y_positive    ; -Y
-
+    beq @move_y_positive        ; -Y
     rts 
 
 @move_x_positive:
@@ -306,118 +303,117 @@ movePlayer_tick:   ; Move the sprite by player speed and directio
     lda player_sprite_y_h 
     sbc #0         
     sta player_sprite_y_h 
-    rts                             ;bra @write_position
+    rts                            
 
-@write_position:                    ; Write updated position back to VRAM
+@write_position:                ; Write updated position back to VRAM
     jsr check_boundaries  
 
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda VERA_DATA0 
     lda VERA_DATA0 
-    lda player_sprite_x_l           ; Write low byte of X
+    lda player_sprite_x_l       ; Write low byte of X
     sta VERA_DATA0  
-    lda player_sprite_x_h           ; Write high byte of X
+    lda player_sprite_x_h       ; Write high byte of X
     sta VERA_DATA0  
-    lda player_sprite_y_l           ; Write low byte of Y
+    lda player_sprite_y_l       ; Write low byte of Y
     sta VERA_DATA0  
-    lda player_sprite_y_h           ; Write high byte of Y
+    lda player_sprite_y_h       ; Write high byte of Y
     sta VERA_DATA0  
     rts     
 check_boundaries:
     ; Check X boundaries
-    lda player_sprite_x_h           ; High byte of X
-    cmp #SCREEN_MAX_X_H             ; Compare with max high byte
-    bcc @check_x_min                ; If less than max, check Y
-    bne @clamp_x_max                ; If greater, clamp X
-    lda player_sprite_x_l           ; Low byte of X
-    cmp #SCREEN_MAX_X_L             ; Compare with max low byte
-    bcc @check_x_min                ; If less than max, check minimum
+    lda player_sprite_x_h       ; High byte of X
+    cmp #SCREEN_MAX_X_H         ; Compare with max high byte
+    bcc @check_x_min            ; If less than max, check Y
+    bne @clamp_x_max            ; If greater, clamp X
+    lda player_sprite_x_l       ; Low byte of X
+    cmp #SCREEN_MAX_X_L         ; Compare with max low byte
+    bcc @check_x_min            ; If less than max, check minimum
 @clamp_x_max:
-    lda #SCREEN_MAX_X_L             ; Clamp low byte of X
-    sta player_sprite_x_l
-    lda #SCREEN_MAX_X_H             ; Clamp high byte of X
-    sta player_sprite_x_h
+    lda #SCREEN_MAX_X_L         ; Clamp low byte of X
+    sta player_sprite_x_l 
+    lda #SCREEN_MAX_X_H         ; Clamp high byte of X
+    sta player_sprite_x_h 
     bra @check_y  
-
+    
 @check_x_min:
-    lda player_sprite_x_h           ; High byte of X
-    cmp #SCREEN_MIN_X_H             ; Compare with min high byte (0)
-    bne @done_x_min                 ; If greater, no need to clamp
-    lda player_sprite_x_l           ; Low byte of X
-    cmp #SCREEN_MIN_X_L             ; Compare with min low byte (0)
-    bcs @done_x_min                 ; If carry is set, no underflow
-    lda #SCREEN_MIN_X_L             ; Clamp low byte of X to 0
-    sta player_sprite_x_l
-    lda #SCREEN_MIN_X_H             ; Clamp high byte of X to 0
-    sta player_sprite_x_h
+    lda player_sprite_x_h       ; High byte of X
+    cmp #SCREEN_MIN_X_H         ; Compare with min high byte (0)
+    bne @done_x_min             ; If greater, no need to clamp
+    lda player_sprite_x_l       ; Low byte of X
+    cmp #SCREEN_MIN_X_L         ; Compare with min low byte (0)
+    bcs @done_x_min             ; If carry is set, no underflow
+    lda #SCREEN_MIN_X_L         ; Clamp low byte of X to 0
+    sta player_sprite_x_l 
+    lda #SCREEN_MIN_X_H         ; Clamp high byte of X to 0
+    sta player_sprite_x_h 
 @done_x_min:
 @check_y: 
     ; Check Y boundaries
-    lda player_sprite_y_h           ; High byte of Y
-    cmp #SCREEN_MAX_Y_H             ; Compare with max high byte
+    lda player_sprite_y_h       ; High byte of Y
+    cmp #SCREEN_MAX_Y_H         ; Compare with max high byte
     bcc @check_y_min            ; If less than max, we're done
-    bne @clamp_y_max                 ; If greater, clamp Y
-    lda player_sprite_y_l        ; Low byte of Y
-    cmp #SCREEN_MAX_Y_L          ; Compare with max low byte
-    bcc @check_y_min             ; If less than max, check minimum
+    bne @clamp_y_max            ; If greater, clamp Y
+    lda player_sprite_y_l       ; Low byte of Y
+    cmp #SCREEN_MAX_Y_L         ; Compare with max low byte
+    bcc @check_y_min            ; If less than max, check minimum
 @clamp_y_max: 
-    lda #SCREEN_MAX_Y_L          ; Clamp low byte of Y
-    sta player_sprite_y_l
-    lda #SCREEN_MAX_Y_H          ; Clamp high byte of Y
-    sta player_sprite_y_h
+    lda #SCREEN_MAX_Y_L         ; Clamp low byte of Y
+    sta player_sprite_y_l 
+    lda #SCREEN_MAX_Y_H         ; Clamp high byte of Y
+    sta player_sprite_y_h 
     bra @doneboundry 
 @check_y_min:
-    lda player_sprite_y_h        ; High byte of Y
-    cmp #SCREEN_MIN_Y_H            ; Compare with min high byte (0)
-    bne @done_y_min              ; If greater, no need to clamp
-    lda player_sprite_y_l        ; Low byte of Y
-    cmp #SCREEN_MIN_Y_L            ; Compare with min low byte (0)
-    bcs @done_y_min              ; If carry is set, no underflow
-    lda #SCREEN_MIN_Y_L            ; Clamp low byte of Y to 0
-    sta player_sprite_y_l
-    lda #SCREEN_MIN_Y_H            ; Clamp high byte of Y to 0
-    sta player_sprite_y_h
+    lda player_sprite_y_h       ; High byte of Y
+    cmp #SCREEN_MIN_Y_H         ; Compare with min high byte (0)
+    bne @done_y_min             ; If greater, no need to clamp
+    lda player_sprite_y_l       ; Low byte of Y
+    cmp #SCREEN_MIN_Y_L         ; Compare with min low byte (0)
+    bcs @done_y_min             ; If carry is set, no underflow
+    lda #SCREEN_MIN_Y_L         ; Clamp low byte of Y to 0
+    sta player_sprite_y_l 
+    lda #SCREEN_MIN_Y_H         ; Clamp high byte of Y to 0
+    sta player_sprite_y_h 
 @done_y_min:
 @doneboundry:
     rts 
 
 update_player_sprite:
     ; Calculate the VRAM address of the sprite frame
-    lda #< (VRAM_SPRITES >> 5)
+    lda #<(VRAM_SPRITES >> 5)
     clc 
     adc player_sprite_index 
     sta ZP_PTR_1 
-    lda #> (VRAM_SPRITES >> 5)
+    lda #>(VRAM_SPRITES >> 5)
     adc #0                      ; Add carry from low byte addition
-    sta ZP_PTR_1 + 1  ; Add the offset for the sprite frame
+    sta ZP_PTR_1 + 1            ; Add the offset for the sprite frame
        
-
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda ZP_PTR_1                ; Write low byte of sprite frame address
     sta VERA_DATA0 
     lda ZP_PTR_1 + 1            ; Write high byte of sprite frame address
     sta VERA_DATA0 
-    lda player_sprite_x_l                   ; Write low byte of X
+    lda player_sprite_x_l       ; Write low byte of X
     sta VERA_DATA0  
-    lda player_sprite_x_h              ; Write high byte of X
+    lda player_sprite_x_h       ; Write high byte of X
     sta VERA_DATA0  
-    lda player_sprite_y_l                  ; Write low byte of Y
+    lda player_sprite_y_l       ; Write low byte of Y
     sta VERA_DATA0  
-    lda player_sprite_y_h               ; Write high byte of Y
+    lda player_sprite_y_h       ; Write high byte of Y
     sta VERA_DATA0  
     rts 
 
 ; Gameplay Screen Init ------------------------------------------------------------
 gameplay_init:                   
-    lda #LAYERCONFIG_32x324BPP      ; Setup tiles on layer 0
+    lda #LAYERCONFIG_32x324BPP  ; Setup tiles on layer 0
     sta VERA_L0_CONFIG 
     lda #(VRAM_TILEMAP >> 9)
     sta VERA_L0_MAPBASE 
     lda #(VRAM_TILES >> 9 )
     sta VERA_L0_TILEBASE 
-    stz VERA_L0_HSCROLL_L           ; horizontal scroll = 0
+    stz VERA_L0_HSCROLL_L       ; horizontal scroll = 0
     stz VERA_L0_HSCROLL_H 
-    stz VERA_L0_VSCROLL_L           ; vertical scroll = 0
+    stz VERA_L0_VSCROLL_L       ; vertical scroll = 0
     stz VERA_L0_VSCROLL_H 
     
     ; configure layer 1: 
@@ -427,18 +423,11 @@ gameplay_init:
     sta VERA_L1_MAPBASE 
     lda #(VRAM_TILES >> 9 ) 
     sta VERA_L1_TILEBASE 
-    stz VERA_L1_HSCROLL_L           ; horizontal scroll = 0
+    stz VERA_L1_HSCROLL_L       ; horizontal scroll = 0
     stz VERA_L1_HSCROLL_H 
-    stz VERA_L1_VSCROLL_L           ; vertical scroll = 0
+    stz VERA_L1_VSCROLL_L       ; vertical scroll = 0
     stz VERA_L1_VSCROLL_H 
     
-    ;load sprites
-    lda #>(VRAM_SPRITES >> 4 )
-    ldx #<(VRAM_SPRITES >> 4 )
-    ldy #<sprites_fn 
-    jsr loadtovram 
-    
-    ; configure sprites
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda #< (VRAM_SPRITES >> 5)
     sta VERA_DATA0 
@@ -465,6 +454,34 @@ gameplay_init:
     sta parallax_scroll_delay    
     rts 
 
+; Start Screen Init ------------------------------------------------------------
+startscreen_init:
+
+
+     ; configure sprite for selection menu
+    MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
+    lda #< (VRAM_SPRITES >> 5)
+    sta VERA_DATA0 
+    lda #> (VRAM_SPRITES >> 5)
+    sta VERA_DATA0 
+    lda player_sprite_x_l       ; Write X position (16-bit)
+    sta VERA_DATA0              ; Low byte of X position
+    lda player_sprite_x_h 
+    stz VERA_DATA0              ; High byte of X position
+    lda player_sprite_y_l       ; Write Y position (16-bit)
+    sta VERA_DATA0              ; Low byte of Y position
+    lda player_sprite_y_h 
+    stz VERA_DATA0              ; High byte of Y position
+    lda #%00001100              ; zlevel, sprite in from of layer1
+    sta VERA_DATA0 
+    lda #%01010000              ; 16x16 , paletter offset 00
+    sta VERA_DATA0 
+    stz VERA_CTRL               ; Set DCSEL to 0
+    lda #%01010001              ; enable sprites,layer 0, and output mode to VGA
+    sta VERA_DC_VIDEO 
+    rts 
+
+
 ; Pause Screen Init ------------------------------------------------------------
 pause_init:
 
@@ -476,29 +493,10 @@ clear_pause_overlay:
     ; To clear the message, just write empty tiles
     ldx #28                     ; Length of message
 @clear_loop:
-    stz VERA_DATA0             ; Write empty tile
-    stz VERA_DATA0             ; Clear attributes
+    stz VERA_DATA0              ; Write empty tile
+    stz VERA_DATA0              ; Clear attributes
     dex 
     bne @clear_loop
     rts 
-    
-    ;lda VERA_DC_VIDEO 
-    ;and #%11011111           ; Clear Layer 1 enable bit
-    ;sta VERA_DC_VIDEO 
-    ;rts 
-
-clear_screen:
-    lda #$00
-    stz VERA_CTRL                   ; Set DCSEL to 0
-    MACRO_VERA_SET_ADDR $0E000, 1   ; Start at VRAM address $0E000
-    ldx #0
-@clear_loop:
-    sta VERA_DATA0                  ; Write 0 to clear the screen
-    inx 
-    bne @clear_loop                 ; Loop until the entire screen is cleared
-    rts 
-
-
-
 
 ; ------------------------------------ End of Game Subroutines

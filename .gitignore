@@ -11,6 +11,7 @@ font.txt
 normx.txt
 normy.txt
 imgui.ini
-/tools/
-/Tests/
-/archive/
+/_Tools/
+/_Tests/
+/_Archive/
+/libraries/
