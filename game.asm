@@ -14,7 +14,6 @@
 
 .org $080D
 .segment "STARTUP"
-  
 .segment "INIT"
 .segment "ONCE"
 .segment "CODE"
@@ -27,6 +26,7 @@
 .include "loadfiledata.asm"
 .include "globals.asm"
 .include "input.asm"
+.include "tilelib.asm"
 
 ;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
 ;|       $9F29******* Display Composer (DC_Video) ***********
@@ -71,33 +71,29 @@ start_game:                     ; ------- Load Game Assets From Files
     ldx #< (VRAM_BITMAP >> 4 )
     ldy #< startscreen_fn 
     jsr loadtovram 
+
     ; load tiles
     lda #> (VRAM_TILES >> 4 )
     ldx #< (VRAM_TILES >> 4 )
     ldy #< tiles_fn 
     jsr loadtovram 
+
     ; load map
     lda #> (VRAM_TILEMAP >> 4 )
     ldx #< (VRAM_TILEMAP >> 4 )
     ldy #< tilemap_fn 
     jsr loadtovram 
+
     ;load sprites
     lda #>(VRAM_SPRITES >> 4 )
     ldx #<(VRAM_SPRITES >> 4 )
     ldy #<sprites_fn 
     jsr loadtovram 
+
     ; Set the screen mode
     lda #SCALE_320X240          ; SCALE320X240 
     sta VERA_DC_HSCALE 
     sta VERA_DC_VSCALE  
-    ; configure layer 0 for background bitmaps
-    lda #LAYERCONFIG_BITMP4BPP 
-    sta VERA_L0_CONFIG 
-    lda #(VRAM_BITMAP >> 9 )
-    sta VERA_L0_TILEBASE 
-    ; initial joystick state: Start & Select pressed
-    lda #$CF
-    sta joystick_latch 
 
 
 init_irq:                       ; ------- IRQ Initializations          
@@ -115,11 +111,11 @@ init_irq:                       ; ------- IRQ Initializations
     lda #%00000011              ; Set VERA to trigger on scan line and vblank
     sta VERA_IEN 
     cli                         ; re-enable IRQ now that vector is properly set
+    
     ; VERA initialize going into the start screen
     jsr startscreen_init 
-   
-    lda #GAME_STATE_START_SCREEN ; Set game state to start screen
-    sta game_state 
+    jsr init_text_mode 
+    
     
 ;===================================================================
 ; Main Game Loop
@@ -178,7 +174,6 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
 @handle_startscreen_tick:
     jsr check_start_menu_input 
     jsr update_player_sprite 
-
     rts 
 
 ; Pause Loop ------------------------------------------------------------
@@ -202,15 +197,12 @@ custom_irq_handler:             ;------- Custom IRQ Handler
    jmp (default_irq_vector)     ; RTI will happen after jump
 irq_scanline_handler:           ; Line IRQ Handler , used for zsound
     sta VERA_ISR                ; Acknowledge the line IRQ 
-	;jsr PCM_PLAY                ; play the zsound
-    jsr playmusic_IRQ            ; play the zsm music
+    ;jsr playmusic_IRQ           ; play the zsm music
+    ;jsr play_pcm                ; play the sound effects
 	ply                         ; restore the registers
 	plx                         ; off the stack
 	pla                         ; which would normally happen on a normal IRQ 
 	rti                         ; exit the IRQ 
-
-
-
 
 ;===================================================================
 ; Other Game Subroutines
@@ -457,7 +449,15 @@ gameplay_init:
 ; Start Screen Init ------------------------------------------------------------
 startscreen_init:
 
-
+    ; configure layer 0 for background bitmaps
+    lda #LAYERCONFIG_BITMP4BPP 
+    sta VERA_L0_CONFIG 
+    lda #(VRAM_BITMAP >> 9 )
+    sta VERA_L0_TILEBASE 
+    
+    ; initial joystick state: Start & Select pressed
+    lda #$CF
+    sta joystick_latch 
      ; configure sprite for selection menu
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda #< (VRAM_SPRITES >> 5)
@@ -479,24 +479,78 @@ startscreen_init:
     stz VERA_CTRL               ; Set DCSEL to 0
     lda #%01010001              ; enable sprites,layer 0, and output mode to VGA
     sta VERA_DC_VIDEO 
+    
+    lda #GAME_STATE_START_SCREEN ; Set game state to start screen
+    sta game_state 
+    
     rts 
 
 
 ; Pause Screen Init ------------------------------------------------------------
 pause_init:
-
-    ;MACRO_PRINT_STRING pause_message 
-    ;MACRO_PRINT_STRING_TOP pause_message, 5, 15    ; Adjust x,y position as needed
-    rts 
+   
+    ; Center the pause message
+    MACRO_PRINT_STRING pause_message, 4, 10    
     
-clear_pause_overlay:
-    ; To clear the message, just write empty tiles
-    ldx #28                     ; Length of message
-@clear_loop:
-    stz VERA_DATA0              ; Write empty tile
-    stz VERA_DATA0              ; Clear attributes
-    dex 
-    bne @clear_loop
+    ; Enable the layer if needed
+    ;lda VERA_DC_VIDEO 
+   ; ora #%00100000             ; Set Layer 1 enable bit
+    ;sta VERA_DC_VIDEO 
     rts 
 
+clear_pause_message:
+    
+    ; Calculate same position as pause message
+    ;ldx #4                    ; Same X as pause message
+    ;ldy #15                   ; Same Y as pause message
+    
+    ; Set VERA address
+   ;MACRO_VERA_SET_ADDR VRAM_TILEMAP + (15 * 64) + (4 * 2), 1
+    
+    ; Clear the message length
+    ;ldx #28                   ; Length of message
+@clear_loop:
+    ;stz VERA_DATA0           ; Clear character
+    ;stz VERA_DATA0           ; Clear attribute
+    ;dex
+    ;bne @clear_loop
+    rts
+
+; Initialize text mode ------------------------------------------------------------
+ init_text_mode:
+    ; Copy PETSCII charset from ROM to VRAM
+    stz VERA_CTRL 
+    
+    ; Set ROM bank to charset ROM
+    lda ROM_BANK 
+    pha                         ; Save current ROM bank
+    lda #CHARSET_ROM_BANK 
+    sta ROM_BANK 
+    
+    ; Set VERA address to where we want the charset
+    lda #((VRAM_PETSCII >> 16) | $10)
+    sta VERA_ADDR_BANK 
+    lda #>VRAM_PETSCII 
+    sta VERA_ADDR_HIGH 
+    lda #<VRAM_PETSCII 
+    sta VERA_ADDR_LOW 
+    
+    ; Copy 256 characters, 8 bytes each
+    ldx #0                      ; Character counter
+@char_loop:
+    ldy #0                      ; Byte counter
+@byte_loop:
+    lda $F000,x                ; Load from ROM charset
+    sta VERA_DATA0             ; Store to VRAM
+    inx 
+    iny 
+    cpy #8                     ; Each character is 8 bytes
+    bne @byte_loop 
+    cpx #0                     ; Did we do all 256 characters?
+    bne @char_loop 
+    
+    ; Restore ROM bank
+    pla 
+    sta ROM_BANK 
+    rts 
 ; ------------------------------------ End of Game Subroutines

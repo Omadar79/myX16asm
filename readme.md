@@ -15,8 +15,10 @@ This project aims to recreate the nostalgic feel of classic space shoot-em up ga
 - **joystick Controls**: Implement an SNES controller as another method to control the spacehip
 - **Assembly Language**: Written in assembly language for an authentic retro programming experience. 
 
-### Special Thanks
+### Special Thanks and Credit
 
+- **ZeroByteOrg**: For the plug in sound and music player library.
+    - https://github.com/ZeroByteOrg/zsound
 - **The CommanderX16 Team**: including the 8-Bit guy for inspiring me to learn retro game dev
     - https://www.youtube.com/The8BitGuy
 - **Matt Heffernan**: for all his youtube tutorials and code examples. 

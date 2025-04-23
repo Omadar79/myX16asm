@@ -6,7 +6,7 @@
 	addr		.addr
 	bank		.byte
 	size		.word	; 24bit digi size (in bytes)
-	sizehi	.byte	; ...
+	sizehi		.byte	; ...
 	cfg			.byte	; VERA_audio_ctrl value
 	rate		.byte	; VERA_audio_rate
 .endstruct

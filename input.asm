@@ -109,7 +109,7 @@ process_game_input:
     sta game_state  
     lda #1
     sta has_state_changed           ; set a 1 as we changed state this frame
-    jsr pause_init  
+    jsr pause_init   
     bra @done                       ; skip to done to avoid checking select button
 @check_select:  
     lda joystick_latch  
@@ -205,7 +205,7 @@ check_pause_input:
     sta game_state 
     lda #1
     sta has_state_changed           ; set a 1 to we change state this frame
-    jsr clear_pause_overlay 
+    jsr clear_pause_message 
     jsr gameplay_init     
 
 @done:

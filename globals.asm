@@ -37,14 +37,15 @@ SCREEN_MAX_X_H          = $01
 SPACE_DELAY             = 16           ; Parallax Scrolling
 SPRITE_SIZE             = 16 * 16 / 2  ; 4bpp 16x16 sprite
 
+;-------- GAME STATES --------
 GAME_STATE_LOADING      = $00
 GAME_STATE_START_SCREEN = $01
 GAME_STATE_IN_GAME      = $02
 GAME_STATE_PAUSED       = $03
 
-;--------------------------------- Variables -------------------------------------------------------
 
-game_state = ZP_GAME_STATE 
+;--------------------------------- Variables -------------------------------------------------------
+game_state = ZP_GAME_STATE  
 has_state_changed = ZP_DID_STATE_CHANGE 
 player_xy_state = ZP_PTR_DIR 
 ; (fractional numbers 192 = 0.75, 128 = 0.5 , 64 = 0.25 , 32 = 0.125 , etc)
@@ -58,7 +59,9 @@ player_speed_x:          .byte 2
 player_speed_y:          .byte 2
 player_sprite_index:     .byte 0    ; sprite index in VERA
 default_irq_vector:      .addr 0
-pause_message:           .byte "GAME PAUSED PRESS ESC TO RESUME", 0
+
+pause_message:           .asciiz "PAUSED"
+
 filenames:
 tilemap_fn:              .asciiz "tilemap.bin"
 sprites_fn:              .asciiz "sprites.bin"

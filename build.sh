@@ -1,0 +1,1 @@
+cl65 -t cx16 -l game.list -o GAME.PRG game.asm  ./lib/zsound.lib 
