@@ -205,8 +205,10 @@ check_pause_input:
     sta game_state 
     lda #1
     sta has_state_changed           ; set a 1 to we change state this frame
-    jsr clear_pause_message 
+    jsr unpause
+    
     jsr gameplay_init     
+    
 
 @done:
     lda joystick_state              ; Update latch with current state

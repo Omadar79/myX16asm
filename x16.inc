@@ -194,12 +194,12 @@ ZP_PTR_4          = $26
 
 ; Game Asset Location - VRAM Addresses
 
-VRAM_TILES             = $00000 ; 227 4bpp 16x16 tiles (may also be used as sprite frames)
-VRAM_SPRITES           = $08000 ; 4bpp 16x16 sprite frames  0-2 spaceshipt, 3-4 flame/jet 08C00-9000
-VRAM_BITMAP            = $0E000 ; 4bpp 320x240 bitmap
-VRAM_TILEMAP           = $17800 ; 32x32 tilemap
-VRAM_PARALLAXMAP       = $18000 ; 32x32 tilemap
-VRAM_TEXTMAP           = $1B000     ; Reserve 2K for text overlay (32x32 = 2048 bytes)
+VRAM_BITMAP            = $00000 ; 4bpp 320x240 bitmap
+VRAM_SPRITES           = $09800 ; 4bpp 16x16 sprite frames 128 sprites
+VRAM_TILES             = $0A800 ; Tiles 100 to $0B47F  
+VRAM_TEXTMAP           = $0C000 ; TODO fix potential OVERLAP in these tile maps 
+VRAM_TILEMAP           = $0D000 ; 32x32 tilemap 
+VRAM_PARALLAXMAP       = $0D800 ; 32x32 tilemap
 VRAM_PETSCII           = $1F000 
 VRAM_PALETTE           = $1FA00 
 VRAM_SPRITE_ATTR       = $1FC00 ; sprite 0 attribute table, 1FD00 sprite 1 attribute table

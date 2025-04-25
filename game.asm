@@ -26,7 +26,6 @@
 .include "loadfiledata.asm"
 .include "globals.asm"
 .include "input.asm"
-.include "tilelib.asm"
 
 ;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
 ;|       $9F29******* Display Composer (DC_Video) ***********
@@ -114,7 +113,6 @@ init_irq:                       ; ------- IRQ Initializations
     
     ; VERA initialize going into the start screen
     jsr startscreen_init 
-    jsr init_text_mode 
     
     
 ;===================================================================
@@ -488,69 +486,80 @@ startscreen_init:
 
 ; Pause Screen Init ------------------------------------------------------------
 pause_init:
-   
-    ; Center the pause message
-    MACRO_PRINT_STRING pause_message, 4, 10    
+    ; First, clear the text layer to remove any garbage
+    MACRO_VERA_SET_ADDR VRAM_TEXTMAP, 1
     
-    ; Enable the layer if needed
-    ;lda VERA_DC_VIDEO 
-   ; ora #%00100000             ; Set Layer 1 enable bit
-    ;sta VERA_DC_VIDEO 
-    rts 
-
-clear_pause_message:
-    
-    ; Calculate same position as pause message
-    ;ldx #4                    ; Same X as pause message
-    ;ldy #15                   ; Same Y as pause message
-    
-    ; Set VERA address
-   ;MACRO_VERA_SET_ADDR VRAM_TILEMAP + (15 * 64) + (4 * 2), 1
-    
-    ; Clear the message length
-    ;ldx #28                   ; Length of message
+    ; Clear 2048 bytes (32x32 characters x 2 bytes per character)
+    ldy #0                      ; Low byte counter
+    ldx #8                      ; 8 pages of 256 bytes each (32x32x2 = 2048)
 @clear_loop:
-    ;stz VERA_DATA0           ; Clear character
-    ;stz VERA_DATA0           ; Clear attribute
-    ;dex
-    ;bne @clear_loop
-    rts
+    lda #$20                    ; Space character
+    sta VERA_DATA0 
+    lda #1                      ; White text on black background
+    sta VERA_DATA0 
+    iny                         ; Next byte
+    bne @clear_loop             ; Continue until Y wraps (256 bytes)
+    dex                         ; Next page
+    bne @clear_loop             ; Continue until all pages cleared
+    
+    ; Configure layer 1 for text mode
+    lda #LAYERCONFIG_TEXT1BPP   ; 1bpp text mode
+    sta VERA_L1_CONFIG 
+    lda #(VRAM_TEXTMAP >> 9)    ; Set map base address
+    sta VERA_L1_MAPBASE 
+    lda #(VRAM_PETSCII >> 9)   ; Set tile base address for PETSCII charset
+    sta VERA_L1_TILEBASE 
+    stz VERA_L1_HSCROLL_L       ; No horizontal scrolling
+    stz VERA_L1_HSCROLL_H 
+    stz VERA_L1_VSCROLL_L       ; No vertical scrolling
+    stz VERA_L1_VSCROLL_H 
 
-; Initialize text mode ------------------------------------------------------------
- init_text_mode:
-    ; Copy PETSCII charset from ROM to VRAM
-    stz VERA_CTRL 
+    ; Enable layer 1 in addition to whatever is already enabled
+    stz VERA_CTRL                ; Set DCSEL to 0
+    lda #%00110001              ; disable sprites, layer 1, layer 0, and output mode to VGA ; 
+    sta VERA_DC_VIDEO 
     
-    ; Set ROM bank to charset ROM
-    lda ROM_BANK 
-    pha                         ; Save current ROM bank
-    lda #CHARSET_ROM_BANK 
-    sta ROM_BANK 
+    ; Each character position = row*64 + column*2
+    ; Position for "PAUSED" = (15*64) + (13*2) = 960 + 26 = 986
     
-    ; Set VERA address to where we want the charset
-    lda #((VRAM_PETSCII >> 16) | $10)
-    sta VERA_ADDR_BANK 
-    lda #>VRAM_PETSCII 
-    sta VERA_ADDR_HIGH 
-    lda #<VRAM_PETSCII 
-    sta VERA_ADDR_LOW 
+    MACRO_VERA_SET_ADDR (VRAM_TEXTMAP + ((12*64) + (16*2)) ), 1
+
+    ; Write each character manually in uppercase which is more reliable
+    lda #$10 ;P
+    sta VERA_DATA0 
+    lda #71                      ; White color
+    sta VERA_DATA0 
     
-    ; Copy 256 characters, 8 bytes each
-    ldx #0                      ; Character counter
-@char_loop:
-    ldy #0                      ; Byte counter
-@byte_loop:
-    lda $F000,x                ; Load from ROM charset
-    sta VERA_DATA0             ; Store to VRAM
-    inx 
-    iny 
-    cpy #8                     ; Each character is 8 bytes
-    bne @byte_loop 
-    cpx #0                     ; Did we do all 256 characters?
-    bne @char_loop 
+    lda #$01 ;A
+    sta VERA_DATA0 
+    lda #71                      ; White color
+    sta VERA_DATA0 
     
-    ; Restore ROM bank
-    pla 
-    sta ROM_BANK 
+     lda #$15 ;U
+    sta VERA_DATA0 
+    lda #71                      ; White color
+    sta VERA_DATA0 
+    
+     lda #$13 ;S
+    sta VERA_DATA0 
+    lda #71                      ; White color
+    sta VERA_DATA0 
+    
+     lda #$05 ;E
+    sta VERA_DATA0 
+    lda #71                      ; White color
+    sta VERA_DATA0 
+    
+    lda #$04 ;D
+    sta VERA_DATA0 
+    lda #71                      ; White color
+    sta VERA_DATA0 
     rts 
+
+; Unpause Screen ------------------------------------------------------------
+unpause:
+
+    
+    rts 
+
 ; ------------------------------------ End of Game Subroutines

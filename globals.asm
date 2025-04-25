@@ -24,7 +24,7 @@ SCALE_640X480           = 128        ; 64 = 1x 640x480 or 80column
 LAYERCONFIG_32x324BPP   = %00000010   ; 32x32 | Text/Tile Mode | T256 0 | BMP 0 | Color 4bpp
 LAYERCONFIG_64X324BPP   = %00010010   ; 64x32 | Text/Tile Mode | T256 0 | BMP 0 | Color 4bpp
 LAYERCONFIG_BITMP4BPP   = %00000110   ; 00 00 | T256 0 | BMP 1 | Color 4bpp 10
-LAYERCONFIG_TEXT1BPP    = %01100000   ; 64x128 | T256 0 | BMP 0 | Color 1pp 00
+LAYERCONFIG_TEXT1BPP    = %00000000   ; 32x32 | T256 0 | BMP 0 | Color 1pp 00
 
 SCREEN_MIN_Y_L          = $05
 SCREEN_MIN_Y_H          = $00
@@ -48,6 +48,9 @@ GAME_STATE_PAUSED       = $03
 game_state = ZP_GAME_STATE  
 has_state_changed = ZP_DID_STATE_CHANGE 
 player_xy_state = ZP_PTR_DIR 
+
+
+
 ; (fractional numbers 192 = 0.75, 128 = 0.5 , 64 = 0.25 , 32 = 0.125 , etc)
 parallax_scroll_delay:   .byte 0
 frame_num:               .byte 0
@@ -60,7 +63,6 @@ player_speed_y:          .byte 2
 player_sprite_index:     .byte 0    ; sprite index in VERA
 default_irq_vector:      .addr 0
 
-pause_message:           .asciiz "PAUSED"
 
 filenames:
 tilemap_fn:              .asciiz "tilemap.bin"
