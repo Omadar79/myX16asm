@@ -32,36 +32,45 @@ ASCII_SPACE = $20
     sta VERA_ADDR_LOW 
 .endmacro
 
-; ------------------- Copy data from RAM to VRAM given a set number of bytes -------------------
-.macro MACRO_RAM_TO_VRAM ram_addr, vram_addr, num_bytes 
-    .scope
-        ; set data port 0 to start writing to VRAM address
-        stz VERA_CTRL 
-        MACRO_VERA_SET_ADDR vram_addr, 1
-
-        lda #<ram_addr 
-        sta ZP_PTR_1 
-        lda #> ram_addr 
-        sta ZP_PTR_1 + 1 
-        ; use index pointers to compare with number of bytes to copy
-        ldx #0
-        ldy #0
-    vram_loop:
-        lda (ZP_PTR_1) , y
-        sta VERA_DATA0 
-        iny 
-        cpx #> num_bytes ; last page yet?
-        beq check_end 
-        cpy #0
-        bne vram_loop ; not on last page, Y non-zero
-        inx ; next page
-        inc ZP_PTR_1 + 1 
-        bra vram_loop
-    check_end:
-        cpy #<num_bytes ; last byte of last page?
-        bne vram_loop ; last page, before last byte
-   .endscope 
+; ------------------- Calculate sprite data address based on sprite index -------------------
+; Input: sprite_index - The 0-based index of the sprite (0-127)
+; Output: Sets address to VRAM_SPRITES + (sprite_index * 128)
+;         For 16x16 4bpp sprites (128 bytes each)
+.macro MACRO_SPRITE_ADDR sprite_index
+    .if .match(.left(1, {sprite_index}), #)
+        ; Immediate mode - constant sprite index
+        .local sprite_idx
+        sprite_idx = .right(.tcount({sprite_index})-1, {sprite_index})
+        lda #<(VRAM_SPRITES + (sprite_idx * 128))
+        sta ZP_PTR_1
+        lda #>(VRAM_SPRITES + (sprite_idx * 128))
+        sta ZP_PTR_1+1
+        lda #^(VRAM_SPRITES + (sprite_idx * 128))
+        sta ZP_PTR_1+2
+    .else
+        ; Variable sprite index
+        lda sprite_index        ; Load sprite index
+        asl                     ; × 2
+        asl                     ; × 4
+        asl                     ; × 8
+        asl                     ; × 16
+        asl                     ; × 32
+        asl                     ; × 64
+        asl                     ; × 128 (size of one 16×16 4bpp sprite)
+        
+        ; Add to VRAM_SPRITES base address
+        clc
+        adc #<VRAM_SPRITES
+        sta ZP_PTR_1            ; Store low byte
+        lda #>VRAM_SPRITES
+        adc #0                  ; Add carry
+        sta ZP_PTR_1+1          ; Store high byte
+        lda #^VRAM_SPRITES
+        adc #0                  ; Add carry
+        sta ZP_PTR_1+2          ; Store bank
+    .endif
 .endmacro
+
 
 .macro MACRO_LOAD_TO_VRAM filename, vram_addr 
     .scope
@@ -85,59 +94,6 @@ ASCII_SPACE = $20
     .endscope 
 .endmacro
 
-; Macro to print a character string
-; Parameters:
-;   string_addr - Address of the string to print (low byte)
-;   x_pos - X position (0-31)
-;   y_pos - Y position (0-31)
-.macro MACRO_PRINT_STRING string_addr, x_pos, y_pos 
-    .scope
-        ; Calculate VRAM address for text position
-        lda #<(VRAM_TEXTMAP) ;+ (y_pos * 64) + (x_pos * 2))
-        sta VERA_ADDR_LOW 
-        lda #>(VRAM_TEXTMAP) ;+ (y_pos * 64) + (x_pos * 2))
-        sta VERA_ADDR_HIGH 
-        lda #$10                    ; Bank 0, increment by 1
-        sta VERA_ADDR_BANK 
-
-        ; Set up string pointer
-        lda #<string_addr 
-        sta ZP_PTR_1 
-        lda #>string_addr 
-        sta ZP_PTR_1 + 1
-
-        ldy #0
-    @print_loop:
-        lda (ZP_PTR_1),y          ; Get character from string
-        beq @done                 ; If zero, we're done
-        sta VERA_DATA0            ; Write character to VRAM
-        lda #%00000000            ; Default attributes (white on black)
-        sta VERA_DATA0            ; Write attributes
-        iny 
-        bra @print_loop
-    @done:
-    .endscope 
-.endmacro
-
-; Macro to clear the text map
-; Clears a 32x32 text map by writing spaces to all positions
-.macro MACRO_CLEAR_TEXT_MAP 
-    .scope
-        MACRO_VERA_SET_ADDR VRAM_TEXTMAP, 1 
-        ; Clear 2048 bytes (32x32)
-        ldx #8                     ; 8 pages of 256 bytes
-        ldy #0                      ; Byte counter
-    @clear_loop:
-        lda #ASCII_SPACE           ; Space character
-        sta VERA_DATA0             ; Write character
-        lda #%00000000             ; Default attributes
-        sta VERA_DATA0             ; Write attributes
-        iny 
-        bne @clear_loop            ; Continue until Y wraps around
-        dex 
-        bne @clear_loop            ; Continue until all pages are cleared
-    .endscope 
-.endmacro
 
 
 .endif

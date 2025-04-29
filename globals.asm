@@ -25,6 +25,7 @@ LAYERCONFIG_32x324BPP   = %00000010   ; 32x32 | Text/Tile Mode | T256 0 | BMP 0 
 LAYERCONFIG_64X324BPP   = %00010010   ; 64x32 | Text/Tile Mode | T256 0 | BMP 0 | Color 4bpp
 LAYERCONFIG_BITMP4BPP   = %00000110   ; 00 00 | T256 0 | BMP 1 | Color 4bpp 10
 LAYERCONFIG_TEXT1BPP    = %00000000   ; 32x32 | T256 0 | BMP 0 | Color 1pp 00
+LAYERCONFIG_64X32UI     = %00010000   ; 64x32 | T256 0 | BMP 0 | Color 1pp 00
 
 SCREEN_MIN_Y_L          = $05
 SCREEN_MIN_Y_H          = $00
@@ -49,7 +50,11 @@ game_state = ZP_GAME_STATE
 has_state_changed = ZP_DID_STATE_CHANGE 
 player_xy_state = ZP_PTR_DIR 
 
+LINES_PER_PIXEL   = 128/SCALE_320X240  ; 2 lines per pixel for 320x240
+START_LINE        = 200 ; 200 lines from the top of the screen
+STOP_LINE         = 250  ; 250 lines from the top of the screen
 
+drawing_ui: .byte 0
 
 ; (fractional numbers 192 = 0.75, 128 = 0.5 , 64 = 0.25 , 32 = 0.125 , etc)
 parallax_scroll_delay:   .byte 0
@@ -61,6 +66,7 @@ player_sprite_y_h:       .byte 0    ; High byte of Y position, don't really use 
 player_speed_x:          .byte 2
 player_speed_y:          .byte 2
 player_sprite_index:     .byte 0    ; sprite index in VERA
+ui_sprite_index:         .byte $0B    ; sprite index in VERA
 default_irq_vector:      .addr 0
 
 
@@ -69,6 +75,8 @@ tilemap_fn:              .asciiz "tilemap.bin"
 sprites_fn:              .asciiz "sprites.bin"
 tiles_fn:                .asciiz "tiles.bin"
 startscreen_fn:          .asciiz "cover.bin"
+
+uitiles_fn:          .asciiz "uitiles.bin"
 ;palette_fn:                .asciiz "pal.bin"
 ;spriteattr_fn:             .asciiz "sprtattr.bin"
 

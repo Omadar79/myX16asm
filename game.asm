@@ -25,7 +25,9 @@
 .include "macros.inc"
 .include "loadfiledata.asm"
 .include "globals.asm"
+.include "sprite.asm"
 .include "input.asm"
+.include "soundfx.asm"
 
 ;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
 ;|       $9F29******* Display Composer (DC_Video) ***********
@@ -66,21 +68,26 @@ start_game:                     ; ------- Load Game Assets From Files
     jsr init_player             ;zsound player init
 
     ; load startscreen
-    lda #> (VRAM_BITMAP >> 4 )
-    ldx #< (VRAM_BITMAP >> 4 )
-    ldy #< startscreen_fn 
+    lda #>(VRAM_BITMAP >> 4 )
+    ldx #<(VRAM_BITMAP >> 4 )
+    ldy #<startscreen_fn 
     jsr loadtovram 
 
     ; load tiles
-    lda #> (VRAM_TILES >> 4 )
-    ldx #< (VRAM_TILES >> 4 )
-    ldy #< tiles_fn 
+    lda #>(VRAM_TILES >> 4 )
+    ldx #<(VRAM_TILES >> 4 )
+    ldy #<tiles_fn 
     jsr loadtovram 
 
     ; load map
     lda #> (VRAM_TILEMAP >> 4 )
     ldx #< (VRAM_TILEMAP >> 4 )
     ldy #< tilemap_fn 
+    jsr loadtovram 
+
+    lda #>(VRAM_UIMAP >> 4 )
+    ldx #<(VRAM_UIMAP >> 4 )
+    ldy #<uitiles_fn 
     jsr loadtovram 
 
     ;load sprites
@@ -93,7 +100,7 @@ start_game:                     ; ------- Load Game Assets From Files
     lda #SCALE_320X240          ; SCALE320X240 
     sta VERA_DC_HSCALE 
     sta VERA_DC_VSCALE  
-
+    
 
 init_irq:                       ; ------- IRQ Initializations          
     sei                         ; disable IRQ while we're initializing our custom irq handler
@@ -105,7 +112,8 @@ init_irq:                       ; ------- IRQ Initializations
     sta IRQVEC                  ; set the IRQ vector to our custom handler low byte 
     lda #> custom_irq_handler   ; reference our custom IRQ handler high byte
     sta IRQVEC + 1              ; set the IRQ vector to our custom handler high byte
-    lda #%11111111              ; SET VERA to trigger on line 255 aka vsync.
+    lda #%11111111              ; SET VERA to trigger on line 255 .
+    ;lda #START_LINE             ;scan line for UI to start
 	sta VERA_IRQLINE_L 
     lda #%00000011              ; Set VERA to trigger on scan line and vblank
     sta VERA_IEN 
@@ -113,7 +121,8 @@ init_irq:                       ; ------- IRQ Initializations
     
     ; VERA initialize going into the start screen
     jsr startscreen_init 
-    
+   
+
     
 ;===================================================================
 ; Main Game Loop
@@ -123,7 +132,7 @@ init_irq:                       ; ------- IRQ Initializations
     ;lda vsync_trig
     bra @main_game_loop         ; loop indefinately 
 
-game_tick_loop:                 ;-------  game tick fires every 60th of a second 
+game_tick_loop:                 ;-------  game tick fires every 60th of a second
     stz has_state_changed       ; Reset but we can change to 1 if a state change happens
     inc frame_num               ; increment frame counter
     lda frame_num 
@@ -158,7 +167,7 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
 
 ; Gameplay Screen Loop ----------------------------------------------------
 @handle_ingame_tick:
-    jsr parallax_tick 
+    ;jsr parallax_tick 
     jsr process_game_input 
     lda player_xy_state 
     cmp #0
@@ -166,6 +175,8 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
     jsr movePlayer_tick    
 @ingame_tick:
     jsr update_player_sprite 
+    ;jsr update_ui_sprite 
+    ;jsr ui_tick 
     rts 
 
 ; Start Screen Loop ----------------------------------------------------
@@ -183,49 +194,53 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
 ; Custom IRQ Handler
 ;===================================================================
 custom_irq_handler:             ;------- Custom IRQ Handler 
-                                ; still allows the Kernal IRQ to run at the end of vsync
     lda #%00000010              ; Check for scanline 
 	and VERA_ISR 
-	bne irq_scanline_handler    ; if scanline then handle it
+	bne irq_scanline_handler    ; if scanline then handle it instead
     lda VERA_ISR 
     and #%00000001              ; check for vsync IRQ
-    beq @vsync_done 
-    jsr game_tick_loop 
+    beq @vsync_done  
+    jsr game_tick_loop          ; run the game tick code every frame
 @vsync_done:                    ; continue to default IRQ handler backed up earlier
    jmp (default_irq_vector)     ; RTI will happen after jump
-irq_scanline_handler:           ; Line IRQ Handler , used for zsound
+
+irq_scanline_handler:           ; ------- Line IRQ Handler 
     sta VERA_ISR                ; Acknowledge the line IRQ 
-    ;jsr playmusic_IRQ           ; play the zsm music
-    ;jsr play_pcm                ; play the sound effects
-	ply                         ; restore the registers
+    ;jsr playmusic_IRQ          ; play the zsm music
+    ;jsr play_pcm               ; play the sound effects
+    jsr soundfx_play_irq 
+    ply                         ; restore the registers
 	plx                         ; off the stack
 	pla                         ; which would normally happen on a normal IRQ 
 	rti                         ; exit the IRQ 
 
+
+
 ;===================================================================
 ; Other Game Subroutines
 ;===================================================================
-parallax_tick:                  ; scroll front layer (layer 1)
-    lda VERA_L1_VSCROLL_L 
-    clc 
-    sbc #1
-    sta VERA_L1_VSCROLL_L 
-    lda VERA_L1_VSCROLL_H 
-    sbc #0 
-    sta VERA_L1_VSCROLL_H         
-    dec parallax_scroll_delay   ; handle parallax delay
-    bne @continue               
-    lda VERA_L0_VSCROLL_L       ; scroll  (layer 0) 
-    clc 
-    sbc #1
-    sta VERA_L0_VSCROLL_L 
-    lda VERA_L0_VSCROLL_H 
-    sbc #0
-    sta VERA_L0_VSCROLL_H 
- @continue:    
-    lda #SPACE_DELAY            ; reset parallax counter
-    sta parallax_scroll_delay 
-    rts 
+;parallax_tick:                  ; scroll front layer (layer 1)
+;   
+;    lda VERA_L1_VSCROLL_L 
+;    clc 
+;    sbc #1
+;    sta VERA_L1_VSCROLL_L 
+;    lda VERA_L1_VSCROLL_H 
+;    sbc #0 
+;    sta VERA_L1_VSCROLL_H         
+;    dec parallax_scroll_delay   ; handle parallax delay
+;    bne @continue               
+;    lda VERA_L0_VSCROLL_L       ; scroll  (layer 0) 
+;    clc 
+;    sbc #1
+;    sta VERA_L0_VSCROLL_L 
+;    lda VERA_L0_VSCROLL_H 
+;    sbc #0
+;    sta VERA_L0_VSCROLL_H 
+; @continue:    
+;    lda #SPACE_DELAY            ; reset parallax counter
+;    sta parallax_scroll_delay 
+;    rts 
 
 movePlayer_tick:                ; Move the sprite by player speed and direction                             
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
@@ -240,6 +255,8 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
     lda VERA_DATA0              ; Read high byte of Y position
     sta player_sprite_y_h 
     
+    lda #0                      ; default sprite index for no movement
+    sta player_sprite_index  
     ldy player_xy_state 
     cpy #1
     beq @move_x_positive        ; +X
@@ -252,7 +269,7 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
     rts 
 
 @move_x_positive:
-    lda #8                      ; Frame 2 for moving right
+    lda #2                      ; Frame 2 for moving right
     sta player_sprite_index 
     lda player_sprite_x_l 
     clc 
@@ -264,7 +281,7 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
     bra @write_position
 
 @move_x_negative:
-    lda #4                      ; Frame 1 for moving left
+    lda #1                      ; Frame 1 for moving left
     sta player_sprite_index 
     lda player_sprite_x_l 
     sec 
@@ -369,15 +386,9 @@ check_boundaries:
     rts 
 
 update_player_sprite:
-    ; Calculate the VRAM address of the sprite frame
-    lda #<(VRAM_SPRITES >> 5)
-    clc 
-    adc player_sprite_index 
-    sta ZP_PTR_1 
-    lda #>(VRAM_SPRITES >> 5)
-    adc #0                      ; Add carry from low byte addition
-    sta ZP_PTR_1 + 1            ; Add the offset for the sprite frame
-       
+    lda player_sprite_index     ; Get current player frame index
+    jsr get_sprite_frame_addr   ; Get sprite frame address  returns address ZP_PTR_1 and ZP_PTR_1+1  
+    
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda ZP_PTR_1                ; Write low byte of sprite frame address
     sta VERA_DATA0 
@@ -390,12 +401,14 @@ update_player_sprite:
     lda player_sprite_y_l       ; Write low byte of Y
     sta VERA_DATA0  
     lda player_sprite_y_h       ; Write high byte of Y
-    sta VERA_DATA0  
+    sta VERA_DATA0     
     rts 
+
+
 
 ; Gameplay Screen Init ------------------------------------------------------------
 gameplay_init:                   
-    lda #LAYERCONFIG_32x324BPP  ; Setup tiles on layer 0
+    lda #LAYERCONFIG_64X324BPP    ; Setup tiles on layer 0
     sta VERA_L0_CONFIG 
     lda #(VRAM_TILEMAP >> 9)
     sta VERA_L0_MAPBASE 
@@ -407,11 +420,11 @@ gameplay_init:
     stz VERA_L0_VSCROLL_H 
     
     ; configure layer 1: 
-    lda #LAYERCONFIG_32x324BPP 
+    lda #LAYERCONFIG_64X32UI    
     sta VERA_L1_CONFIG 
-    lda #(VRAM_PARALLAXMAP >> 9 )
+    lda #(VRAM_UIMAP >> 9 )
     sta VERA_L1_MAPBASE 
-    lda #(VRAM_TILES >> 9 ) 
+    lda #(VRAM_PETSCII >> 9)  
     sta VERA_L1_TILEBASE 
     stz VERA_L1_HSCROLL_L       ; horizontal scroll = 0
     stz VERA_L1_HSCROLL_H 
@@ -435,13 +448,17 @@ gameplay_init:
     sta VERA_DATA0 
     lda #%01010000              ; 16x16 , paletter offset 00
     sta VERA_DATA0 
+    
+    
+    jsr build_sprite_ui  
+    
     stz VERA_CTRL               ; Set DCSEL to 0
     lda #%01110001              ; enable sprites, layer 1, layer 0, and output mode to VGA
     sta VERA_DC_VIDEO 
 
     ; Initialize game variables
-    lda #SPACE_DELAY            ; initialize our paralax counter
-    sta parallax_scroll_delay    
+   ; lda #SPACE_DELAY            ; initialize our paralax counter
+   ; sta parallax_scroll_delay   
     rts 
 
 ; Start Screen Init ------------------------------------------------------------
@@ -545,7 +562,7 @@ pause_init:
     lda #71                      ; White color
     sta VERA_DATA0 
     
-     lda #$05 ;E
+    lda #$05 ;E
     sta VERA_DATA0 
     lda #71                      ; White color
     sta VERA_DATA0 
@@ -557,9 +574,8 @@ pause_init:
     rts 
 
 ; Unpause Screen ------------------------------------------------------------
-unpause:
-
-    
+unpause:   
     rts 
+
 
 ; ------------------------------------ End of Game Subroutines

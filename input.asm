@@ -8,6 +8,7 @@ INPUT_ASM = 1
 
 .include "x16.inc"
 .include "globals.asm"
+.include "soundfx.asm"
 
 ;|||||||||||||||||||||||||||||||| REFERENCES - JOYSTICK  ||||||||||||
 ;| ***********kernal supported joystick buttons to keys
@@ -109,6 +110,7 @@ process_game_input:
     sta game_state  
     lda #1
     sta has_state_changed           ; set a 1 as we changed state this frame
+    jsr play_sfx_explode 
     jsr pause_init   
     bra @done                       ; skip to done to avoid checking select button
 @check_select:  
@@ -155,11 +157,13 @@ check_start_menu_input:
 @menu_up:  
     lda #132                         ; set direction to up
     sta player_sprite_y_l  
+    jsr play_sfx_ping  
     bra @done_start_menu     
 
 @menu_down:  
     lda #152                         ; set direction to down
-    sta player_sprite_y_l  
+    sta player_sprite_y_l 
+    jsr play_sfx_ping   
     bra @done_start_menu  
 
 @start_game: ;TODO check which menu we are on and set the game state accordingly
@@ -167,7 +171,9 @@ check_start_menu_input:
     sta game_state 
     lda #1
     sta has_state_changed           ; set a 1 to we change state this frame
+    jsr play_sfx_shoot 
     jsr gameplay_init 
+                        
     rts 
 
 @done_start_menu:
@@ -205,8 +211,8 @@ check_pause_input:
     sta game_state 
     lda #1
     sta has_state_changed           ; set a 1 to we change state this frame
+    jsr play_sfx_explode  
     jsr unpause
-    
     jsr gameplay_init     
     
 
