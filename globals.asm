@@ -3,8 +3,8 @@
 ; Programmer:   Dustin Taub
 ; Description:  Global variables and constants for the game 
 ; //////////////////////////////////////////////////////////////////////
-.ifndef GLOBALS_ASM
-GLOBALS_ASM = 1
+.ifndef _GLOBALS_ASM
+_GLOBALS_ASM = 1
 
 
 ;----------------------------------- ZERO PAGE VARIABLES ----------------------------------
@@ -50,11 +50,14 @@ game_state = ZP_GAME_STATE
 has_state_changed = ZP_DID_STATE_CHANGE 
 player_xy_state = ZP_PTR_DIR 
 
-LINES_PER_PIXEL   = 128/SCALE_320X240  ; 2 lines per pixel for 320x240
+LINES_PER_PIXEL   = 128 / SCALE_320X240  ; 2 lines per pixel for 320x240
 START_LINE        = 200 ; 200 lines from the top of the screen
 STOP_LINE         = 250  ; 250 lines from the top of the screen
 
-drawing_ui: .byte 0
+
+pause_cooldown:        .byte 0    ; Cooldown timer for button presses
+zsmkit_lowram:         .res 256
+;drawing_ui: .byte 0
 
 ; (fractional numbers 192 = 0.75, 128 = 0.5 , 64 = 0.25 , 32 = 0.125 , etc)
 parallax_scroll_delay:   .byte 0
@@ -68,18 +71,6 @@ player_speed_y:          .byte 2
 player_sprite_index:     .byte 0    ; sprite index in VERA
 ui_sprite_index:         .byte $0B    ; sprite index in VERA
 default_irq_vector:      .addr 0
-
-
-filenames:
-tilemap_fn:              .asciiz "tilemap.bin"
-sprites_fn:              .asciiz "sprites.bin"
-tiles_fn:                .asciiz "tiles.bin"
-startscreen_fn:          .asciiz "cover.bin"
-
-uitiles_fn:          .asciiz "uitiles.bin"
-;palette_fn:                .asciiz "pal.bin"
-;spriteattr_fn:             .asciiz "sprtattr.bin"
-
 
 ;---------------------------------End of Variables -----------------------------------------------
 

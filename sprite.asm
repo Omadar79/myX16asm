@@ -3,8 +3,8 @@
 ; Programmer:   Dustin Taub
 ; Description:  Sprite handling for the game
 ;===================================================================
-.ifndef SPRITE_ASM
-SPRITET_ASM = 1
+.ifndef _SPRITE_ASM
+_SPRITE_ASM = 1
 
 .include "x16.inc"
 .include "globals.asm"

@@ -20,8 +20,7 @@
     jmp start_game 
 
 .include "x16.inc"
-.include "zsmplayer.inc"
-.include "pcmplayer.inc"
+.include "zsmkit.inc"
 .include "macros.inc"
 .include "loadfiledata.asm"
 .include "globals.asm"
@@ -64,9 +63,6 @@
 ;===================================================================
 start_game:                     ; ------- Load Game Assets From Files
 
-    ;zsound player init
-    jsr init_player             ;zsound player init
-
     ; load startscreen
     lda #>(VRAM_BITMAP >> 4 )
     ldx #<(VRAM_BITMAP >> 4 )
@@ -80,14 +76,14 @@ start_game:                     ; ------- Load Game Assets From Files
     jsr loadtovram 
 
     ; load map
-    lda #> (VRAM_TILEMAP >> 4 )
-    ldx #< (VRAM_TILEMAP >> 4 )
+    lda #>(VRAM_TILEMAP >> 4 )
+    ldx #<(VRAM_TILEMAP >> 4 )
     ldy #< tilemap_fn 
     jsr loadtovram 
 
     lda #>(VRAM_UIMAP >> 4 )
     ldx #<(VRAM_UIMAP >> 4 )
-    ldy #<uitiles_fn 
+    ldy #<uimap_fn 
     jsr loadtovram 
 
     ;load sprites
@@ -95,6 +91,21 @@ start_game:                     ; ------- Load Game Assets From Files
     ldx #<(VRAM_SPRITES >> 4 )
     ldy #<sprites_fn 
     jsr loadtovram 
+
+    ; Load "zsmkit bin" to RAM bank 5 at A000 
+    lda #ZSMKIT_BANK           ; RAM bank for this asset
+    ldx #$A0                   ; High byte of address ($A000 in Bank ZSMKIT_BANK 5)
+    ldy #<zsmkit_fn            ; 
+    jsr loadtoram   
+    
+
+     ; Load "zsmkit bin" to RAM bank 5 at A000 
+    lda #ZSMKIT_BANK + 1       ; RAM bank for this asset
+    ldx #$A0                   ; High byte of address ($A000 in Bank ZSMKIT_BANK 5)
+    ldy #<song_fn               
+    jsr loadtoram   
+    
+    jsr sound_init              ;zsound player init
 
     ; Set the screen mode
     lda #SCALE_320X240          ; SCALE320X240 
@@ -118,7 +129,8 @@ init_irq:                       ; ------- IRQ Initializations
     lda #%00000011              ; Set VERA to trigger on scan line and vblank
     sta VERA_IEN 
     cli                         ; re-enable IRQ now that vector is properly set
-    
+
+    stz pause_cooldown          ; Initialize cooldown timer to 0
     ; VERA initialize going into the start screen
     jsr startscreen_init 
    
@@ -165,6 +177,12 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
 @tick_done:
     rts 
 
+; Start Screen Loop ----------------------------------------------------
+@handle_startscreen_tick:
+    jsr check_start_menu_input 
+    jsr update_player_sprite 
+    rts 
+
 ; Gameplay Screen Loop ----------------------------------------------------
 @handle_ingame_tick:
     ;jsr parallax_tick 
@@ -177,12 +195,6 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
     jsr update_player_sprite 
     ;jsr update_ui_sprite 
     ;jsr ui_tick 
-    rts 
-
-; Start Screen Loop ----------------------------------------------------
-@handle_startscreen_tick:
-    jsr check_start_menu_input 
-    jsr update_player_sprite 
     rts 
 
 ; Pause Loop ------------------------------------------------------------
@@ -199,22 +211,24 @@ custom_irq_handler:             ;------- Custom IRQ Handler
 	bne irq_scanline_handler    ; if scanline then handle it instead
     lda VERA_ISR 
     and #%00000001              ; check for vsync IRQ
-    beq @vsync_done  
+    beq @vsync_done             
     jsr game_tick_loop          ; run the game tick code every frame
 @vsync_done:                    ; continue to default IRQ handler backed up earlier
    jmp (default_irq_vector)     ; RTI will happen after jump
 
-irq_scanline_handler:           ; ------- Line IRQ Handler 
+irq_scanline_handler:           ; ------- SCAN Line IRQ Handler, multiple scan lines per frame
     sta VERA_ISR                ; Acknowledge the line IRQ 
-    ;jsr playmusic_IRQ          ; play the zsm music
-    ;jsr play_pcm               ; play the sound effects
+
+    lda #ZSMKIT_BANK 
+    sta RAM_BANK             ; Set the current RAM bank
+    lda #0
+	jsr zsm_tick                ; Call the ZSM tick function to update the sound engine                              
     jsr soundfx_play_irq 
+
     ply                         ; restore the registers
 	plx                         ; off the stack
 	pla                         ; which would normally happen on a normal IRQ 
 	rti                         ; exit the IRQ 
-
-
 
 ;===================================================================
 ; Other Game Subroutines
@@ -327,8 +341,7 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
     lda player_sprite_y_h       ; Write high byte of Y
     sta VERA_DATA0  
     rts     
-check_boundaries:
-    ; Check X boundaries
+check_boundaries:               ; check x max boundaries first
     lda player_sprite_x_h       ; High byte of X
     cmp #SCREEN_MAX_X_H         ; Compare with max high byte
     bcc @check_x_min            ; If less than max, check Y
@@ -336,14 +349,13 @@ check_boundaries:
     lda player_sprite_x_l       ; Low byte of X
     cmp #SCREEN_MAX_X_L         ; Compare with max low byte
     bcc @check_x_min            ; If less than max, check minimum
-@clamp_x_max:
+@clamp_x_max:                   ; Clamp X to max
     lda #SCREEN_MAX_X_L         ; Clamp low byte of X
     sta player_sprite_x_l 
     lda #SCREEN_MAX_X_H         ; Clamp high byte of X
     sta player_sprite_x_h 
     bra @check_y  
-    
-@check_x_min:
+@check_x_min:                   ; Check X min boundaries and clamp if needed before going to Y
     lda player_sprite_x_h       ; High byte of X
     cmp #SCREEN_MIN_X_H         ; Compare with min high byte (0)
     bne @done_x_min             ; If greater, no need to clamp
@@ -355,8 +367,7 @@ check_boundaries:
     lda #SCREEN_MIN_X_H         ; Clamp high byte of X to 0
     sta player_sprite_x_h 
 @done_x_min:
-@check_y: 
-    ; Check Y boundaries
+@check_y:                       ; Check Y max boundaries next
     lda player_sprite_y_h       ; High byte of Y
     cmp #SCREEN_MAX_Y_H         ; Compare with max high byte
     bcc @check_y_min            ; If less than max, we're done
@@ -370,7 +381,7 @@ check_boundaries:
     lda #SCREEN_MAX_Y_H         ; Clamp high byte of Y
     sta player_sprite_y_h 
     bra @doneboundry 
-@check_y_min:
+@check_y_min:                   ; Check Y min boundaries and clamp if needed
     lda player_sprite_y_h       ; High byte of Y
     cmp #SCREEN_MIN_Y_H         ; Compare with min high byte (0)
     bne @done_y_min             ; If greater, no need to clamp
@@ -404,7 +415,25 @@ update_player_sprite:
     sta VERA_DATA0     
     rts 
 
+; Music Sound Init ------------------------------------------------------------
+sound_init:
+    lda #ZSMKIT_BANK 
+    sta RAM_BANK           ; Set the current RAM bank
+    ldx #<zsmkit_lowram 
+	ldy #>zsmkit_lowram 
+    jsr zsm_init_engine
+    
 
+	lda ZSMKIT_BANK + 1
+	ldx #0
+	jsr zsm_setbank 
+
+	ldx #0
+	jsr zsm_setmem 
+
+	ldx #0
+	jsr zsm_play 
+    rts 
 
 ; Gameplay Screen Init ------------------------------------------------------------
 gameplay_init:                   
@@ -448,22 +477,22 @@ gameplay_init:
     sta VERA_DATA0 
     lda #%01010000              ; 16x16 , paletter offset 00
     sta VERA_DATA0 
-    
-    
+     
     jsr build_sprite_ui  
     
     stz VERA_CTRL               ; Set DCSEL to 0
     lda #%01110001              ; enable sprites, layer 1, layer 0, and output mode to VGA
     sta VERA_DC_VIDEO 
 
+    lda #1      ; Set cooldown timer
+    sta pause_cooldown 
     ; Initialize game variables
-   ; lda #SPACE_DELAY            ; initialize our paralax counter
-   ; sta parallax_scroll_delay   
+    ; lda #SPACE_DELAY            ; initialize our paralax counter
+    ; sta parallax_scroll_delay   
     rts 
 
 ; Start Screen Init ------------------------------------------------------------
 startscreen_init:
-
     ; configure layer 0 for background bitmaps
     lda #LAYERCONFIG_BITMP4BPP 
     sta VERA_L0_CONFIG 
@@ -497,7 +526,6 @@ startscreen_init:
     
     lda #GAME_STATE_START_SCREEN ; Set game state to start screen
     sta game_state 
-    
     rts 
 
 
@@ -577,5 +605,16 @@ pause_init:
 unpause:   
     rts 
 
-
+;init_music:
+;    lda MUSIC_ENABLED ; check whether music is disabled
+;
+;start_music:
+;	pha 
+;	jsr ZSM_STOP ; just in case a song is already playing.
+;	jsr CLEAR_YM ; clean up YM after the previous song
+;	lda MUSIC_ENABLED ; check whether music is disabled
+;	bne STM1
+;	pla	 	  		 ; keep the stack tidy
+;	rts 
+;
 ; ------------------------------------ End of Game Subroutines

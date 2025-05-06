@@ -1,8 +1,8 @@
 ; ===================================================================
 ; UI Implementation
 ; ===================================================================
-.ifndef UI_ASM
-UI_ASM = 1
+.ifndef _UI_ASM
+_UI_ASM = 1
 
 .include "x16.inc"
 .include "globals.asm"

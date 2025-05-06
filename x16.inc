@@ -53,7 +53,7 @@ VERA_SPI_DATA     = $9F3E
 VERA_SPI_CTRL     = $9F3F
 
 ROM_BANK          = $01
-RAM_BANK          = $00
+RAM_BANK           = $00
 
 YM_REG            = $9F40
 YM_DATA           = $9F41
@@ -66,6 +66,11 @@ GEOS_ROM_BANK     = 3
 BASIC_ROM_BANK    = 4
 MONITOR_ROM_BANK  = 5
 CHARSET_ROM_BANK  = 6
+
+
+; RAM Banks
+
+ZSMKIT_BANK      = $05
 
 ; Banked Addresses
 RAM_WIN           = $A000
@@ -199,7 +204,6 @@ VRAM_SPRITES           = $09800 ; 4bpp 16x16 sprite frames 128 sprites
 VRAM_TILES             = $0A800 ; Tiles 100 to $0B47F  
 VRAM_TEXTMAP           = $0C000 ; TODO fix potential OVERLAP in these tile maps 
 VRAM_TILEMAP           = $0D000 ; 32x32 tilemap 
-;VRAM_PARALLAXMAP       = $0D800 ; 32x32 tilemap
 VRAM_UIMAP             = $0E800 ; 10 x32 tilemap
 VRAM_PETSCII           = $1F000 
 VRAM_PALETTE           = $1FA00 

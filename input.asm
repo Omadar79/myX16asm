@@ -3,8 +3,8 @@
 ; Programmer:   Dustin Taub
 ; Description:  Input handling for joystick/keyboard for game and menus
 ;===================================================================
-.ifndef INPUT_ASM
-INPUT_ASM = 1
+.ifndef _INPUT_ASM
+_INPUT_ASM = 1
 
 .include "x16.inc"
 .include "globals.asm"
@@ -105,12 +105,18 @@ process_game_input:
     lda joystick_latch  
     bit #%00010000  
     beq @check_select  
-@pause_game:                        ; Start button pressed, pause game
+@pause_game:               
+    ; Check if we're still in cooldown period
+    lda pause_cooldown 
+    beq @continue_pause_input    ; If zero, we can process input
+    dec pause_cooldown          ; Otherwise, decrement timer
+    bra @done                    ; And exit without processing input
+@continue_pause_input:         ; Start button pressed, pause game
     lda #GAME_STATE_PAUSED          ; change state
     sta game_state  
     lda #1
     sta has_state_changed           ; set a 1 as we changed state this frame
-    jsr play_sfx_explode 
+    jsr play_sfx_menu 
     jsr pause_init   
     bra @done                       ; skip to done to avoid checking select button
 @check_select:  
@@ -157,21 +163,21 @@ check_start_menu_input:
 @menu_up:  
     lda #132                         ; set direction to up
     sta player_sprite_y_l  
-    jsr play_sfx_ping  
+    jsr play_sfx_shoot
     bra @done_start_menu     
 
 @menu_down:  
     lda #152                         ; set direction to down
     sta player_sprite_y_l 
-    jsr play_sfx_ping   
+    jsr play_sfx_laser
     bra @done_start_menu  
 
 @start_game: ;TODO check which menu we are on and set the game state accordingly
     lda #GAME_STATE_IN_GAME        ; Set game state to in-game
     sta game_state 
     lda #1
-    sta has_state_changed           ; set a 1 to we change state this frame
-    jsr play_sfx_shoot 
+    sta has_state_changed          ; set a 1 to we change state this frame
+    jsr play_sfx_sparkle 
     jsr gameplay_init 
                         
     rts 
@@ -211,7 +217,7 @@ check_pause_input:
     sta game_state 
     lda #1
     sta has_state_changed           ; set a 1 to we change state this frame
-    jsr play_sfx_explode  
+    jsr play_sfx_menu
     jsr unpause
     jsr gameplay_init     
     
