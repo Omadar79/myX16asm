@@ -2,8 +2,8 @@
 ; File:         game.asm
 ; Programmer:   Dustin Taub
 ;
-; Resources: ZeroByteOrg ZSound Library for the Commander X16 
-;                       https://github.com/ZeroByteOrg/ZSound
+; Resources: ZSMKIT Sound Implementation by MooingLemur
+;                       https://github.com/mooinglemur/zsmkit 
 ;
 ; Description:  This is where the entire game starts. 
 ;               -Initializes the game
@@ -20,13 +20,15 @@
     jmp start_game 
 
 .include "x16.inc"
-.include "zsmkit.inc"
 .include "macros.inc"
 .include "loadfiledata.asm"
 .include "globals.asm"
 .include "sprite.asm"
 .include "input.asm"
 .include "soundfx.asm"
+.include "music.asm"
+
+
 
 ;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
 ;|       $9F29******* Display Composer (DC_Video) ***********
@@ -90,22 +92,9 @@ start_game:                     ; ------- Load Game Assets From Files
     lda #>(VRAM_SPRITES >> 4 )
     ldx #<(VRAM_SPRITES >> 4 )
     ldy #<sprites_fn 
-    jsr loadtovram 
-
-    ; Load "zsmkit bin" to RAM bank 5 at A000 
-    lda #ZSMKIT_BANK           ; RAM bank for this asset
-    ldx #$A0                   ; High byte of address ($A000 in Bank ZSMKIT_BANK 5)
-    ldy #<zsmkit_fn            ; 
-    jsr loadtoram   
+    jsr loadtovram   
     
-
-     ; Load "zsmkit bin" to RAM bank 5 at A000 
-    lda #ZSMKIT_BANK + 1       ; RAM bank for this asset
-    ldx #$A0                   ; High byte of address ($A000 in Bank ZSMKIT_BANK 5)
-    ldy #<song_fn               
-    jsr loadtoram   
-    
-    jsr sound_init              ;zsound player init
+    jsr music_init              ; zsound player init
 
     ; Set the screen mode
     lda #SCALE_320X240          ; SCALE320X240 
@@ -134,7 +123,6 @@ init_irq:                       ; ------- IRQ Initializations
     ; VERA initialize going into the start screen
     jsr startscreen_init 
    
-
     
 ;===================================================================
 ; Main Game Loop
@@ -415,25 +403,6 @@ update_player_sprite:
     sta VERA_DATA0     
     rts 
 
-; Music Sound Init ------------------------------------------------------------
-sound_init:
-    lda #ZSMKIT_BANK 
-    sta RAM_BANK           ; Set the current RAM bank
-    ldx #<zsmkit_lowram 
-	ldy #>zsmkit_lowram 
-    jsr zsm_init_engine
-    
-
-	lda ZSMKIT_BANK + 1
-	ldx #0
-	jsr zsm_setbank 
-
-	ldx #0
-	jsr zsm_setmem 
-
-	ldx #0
-	jsr zsm_play 
-    rts 
 
 ; Gameplay Screen Init ------------------------------------------------------------
 gameplay_init:                   
@@ -605,16 +574,4 @@ pause_init:
 unpause:   
     rts 
 
-;init_music:
-;    lda MUSIC_ENABLED ; check whether music is disabled
-;
-;start_music:
-;	pha 
-;	jsr ZSM_STOP ; just in case a song is already playing.
-;	jsr CLEAR_YM ; clean up YM after the previous song
-;	lda MUSIC_ENABLED ; check whether music is disabled
-;	bne STM1
-;	pla	 	  		 ; keep the stack tidy
-;	rts 
-;
 ; ------------------------------------ End of Game Subroutines

@@ -15,15 +15,14 @@ sprites_fn:              .asciiz "sprites.bin"
 tiles_fn:                .asciiz "tiles.bin"
 startscreen_fn:          .asciiz "cover.bin"
 uimap_fn:                .asciiz "uimap.bin"
-zsmkit_fn:  	         .asciiz "zsmkit.bin"
-song_fn:                 .asciiz "music.zsm"
+;zsmkit_fn:  	         .asciiz "zsmkit.bin"
+;song_fn:                 .asciiz "song1.zsm"
+
 ;music_fn:                .asciiz "musictst.bin"
 ;palette_fn:                .asciiz "pal.bin"
 ;spriteattr_fn:             .asciiz "sprtattr.bin"
 
 
-song1:
-	.byte 0,0,0
 
 
 ; ===================================================================

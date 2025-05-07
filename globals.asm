@@ -56,7 +56,7 @@ STOP_LINE         = 250  ; 250 lines from the top of the screen
 
 
 pause_cooldown:        .byte 0    ; Cooldown timer for button presses
-zsmkit_lowram:         .res 256
+
 ;drawing_ui: .byte 0
 
 ; (fractional numbers 192 = 0.75, 128 = 0.5 , 64 = 0.25 , 32 = 0.125 , etc)

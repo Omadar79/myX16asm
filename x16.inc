@@ -68,10 +68,6 @@ MONITOR_ROM_BANK  = 5
 CHARSET_ROM_BANK  = 6
 
 
-; RAM Banks
-
-ZSMKIT_BANK      = $05
-
 ; Banked Addresses
 RAM_WIN           = $A000
 RAM_WIN_SIZE      = $2000
