@@ -16,7 +16,7 @@ zsmkit_filename:
 zsmkit_filename_end:
 
 filename1:
-	.byte "song1.zsm"
+	.byte "test1.zsm"
 filename2:
 	.byte "song2.zsm"
 filename3:
@@ -187,12 +187,12 @@ music_init:
 ; Start Song Playback ------------------------------------------------------------
 	lda #ZSMKIT_BANK 
 	sta RAM_BANK 
-	lda song6 + 2
+	lda song1 + 2
 	ldx #0
 	jsr zsm_setbank 
 
-	lda song6 
-	ldy song6 + 1 
+	lda song1 
+	ldy song1 + 1 
 	ldx #0
 	jsr zsm_setmem 
 
