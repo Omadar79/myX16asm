@@ -197,6 +197,7 @@ ZP_PTR_4          = $26
 
 VRAM_BITMAP            = $00000 ; 4bpp 320x240 bitmap
 VRAM_SPRITES           = $09800 ; 4bpp 16x16 sprite frames 128 sprites
+VRAM_SMALL_SPRITES     = $0A400 ; 4bpp 8x8 sprite frames 32 sprites
 VRAM_TILES             = $0A800 ; Tiles 100 to $0B47F  
 VRAM_TEXTMAP           = $0C000 ; TODO fix potential OVERLAP in these tile maps 
 VRAM_TILEMAP           = $0D000 ; 32x32 tilemap 

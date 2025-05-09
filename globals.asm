@@ -6,20 +6,16 @@
 .ifndef _GLOBALS_ASM
 _GLOBALS_ASM = 1
 
-
 ;----------------------------------- ZERO PAGE VARIABLES ----------------------------------
 ;ZP_PTR_1 to ZP_PTR_4 are temp and defined in x16.inc  ($7E, $22, $24, $26)
-
 ZP_PTR_DIR              = $28        ; ZP pointer for direction  0 = no move, 1 = right, 2 = left, 3 = up, 4 = down
 ZP_GAME_STATE           = $2A
 ZP_DID_STATE_CHANGE     = $2C        ; 0 = no state change, 1 = state change
-
 
 ;------------------------------------ Constants
 SCALE_160X120           = 32         ; 14 = 4x (160x120)
 SCALE_320X240           = 64         ; 64 = 2x 320x240 or 40column
 SCALE_640X480           = 128        ; 64 = 1x 640x480 or 80column
-
 
 LAYERCONFIG_32x324BPP   = %00000010   ; 32x32 | Text/Tile Mode | T256 0 | BMP 0 | Color 4bpp
 LAYERCONFIG_64X324BPP   = %00010010   ; 64x32 | Text/Tile Mode | T256 0 | BMP 0 | Color 4bpp

@@ -18,7 +18,6 @@
 .segment "ONCE"
 .segment "CODE"
     jmp start_game 
-
 .include "x16.inc"
 .include "macros.inc"
 .include "loadfiledata.asm"
@@ -27,8 +26,7 @@
 .include "input.asm"
 .include "soundfx.asm"
 .include "music.asm"
-
-
+.include "proj_manager.asm"
 
 ;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
 ;|       $9F29******* Display Composer (DC_Video) ***********
@@ -93,7 +91,14 @@ start_game:                     ; ------- Load Game Assets From Files
     ldx #<(VRAM_SPRITES >> 4 )
     ldy #<sprites_fn 
     jsr loadtovram   
+
+      ;load sprites
+    lda #>(VRAM_SMALL_SPRITES >> 4 )
+    ldx #<(VRAM_SMALL_SPRITES >> 4 )
+    ldy #<spritesmall_fn 
+    jsr loadtovram   
     
+
     jsr music_init              ; zsound player init
 
     ; Set the screen mode
@@ -120,10 +125,8 @@ init_irq:                       ; ------- IRQ Initializations
     cli                         ; re-enable IRQ now that vector is properly set
 
     stz pause_cooldown          ; Initialize cooldown timer to 0
-    ; VERA initialize going into the start screen
     jsr startscreen_init 
    
-    
 ;===================================================================
 ; Main Game Loop
 ;===================================================================
