@@ -39,8 +39,6 @@ sp_att_enemyproj =      $1FD08  ; 20x
                                 ; 5x
                                 ; $1FF88 /$1FF90 /$1FF98 /$1FFA0 /$1FFA8 
 
-                                
-
 sp_att_ui =             $1FFB0  ; 10x
                                 ; $1FFB0 /$1FFB8 /$1FFC0 / $1FFC8 /$1FFD0 /$1FFD8 /$1FFE0 /$1FFE8 /$1FFF0 /$1FFF8 
 
@@ -65,9 +63,9 @@ get_sprite_frame_addr:
 ; Inputs:
 ;   A = sprite index (0-127)
 ;   X = sprite frame index 
-;   ZP_PTR_1 = X position (low byte)
+;   ZP_PTR_1   = X position (low byte)
 ;   ZP_PTR_1+1 = X position (high byte)
-;   ZP_PTR_2 = Y position (low byte)
+;   ZP_PTR_2   = Y position (low byte)
 ;   ZP_PTR_2+1 = Y position (high byte)
 ; ===================================================================
 ;update_sprite:
