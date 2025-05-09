@@ -26,7 +26,7 @@
 .include "input.asm"
 .include "soundfx.asm"
 .include "music.asm"
-.include "proj_manager.asm"
+.include "projectiles.asm"
 
 ;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
 ;|       $9F29******* Display Composer (DC_Video) ***********
@@ -59,7 +59,7 @@
 ;||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
 ;===================================================================
-; Initialize the game
+; Initialize the game | this runs before the game starts
 ;===================================================================
 start_game:                     ; ------- Load Game Assets From Files
 
@@ -128,16 +128,21 @@ init_irq:                       ; ------- IRQ Initializations
     jsr startscreen_init 
    
 ;===================================================================
-; Main Game Loop
+; Game Loops | The mail loop just waits for IRQs.  Specific GameState ticks are in here to be triggered
 ;===================================================================
 @main_game_loop:
     wai                         ; do nothing in main loop, just let ISR do everything
-    ;lda vsync_trig
     bra @main_game_loop         ; loop indefinately 
 
 game_tick_loop:                 ;-------  game tick fires every 60th of a second
     stz has_state_changed       ; Reset but we can change to 1 if a state change happens
     inc frame_num               ; increment frame counter
+
+    ; Process any active state transitions
+    jsr handle_state_transitions 
+    lda has_state_changed       ; Check if state transition happened
+    bne @tick_done              ; If state changed this frame, skip to end
+
     lda frame_num 
     cmp #60    
     bne @tick                   ; run tick code and check for frame 60 
@@ -147,36 +152,24 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
     lda game_state  
     cmp #GAME_STATE_START_SCREEN 
     beq @handle_startscreen_tick 
-    lda has_state_changed 
-    cmp #1 
-    beq @tick_done              ; if a state was changed lets finish this frame
-    lda game_state              
     cmp #GAME_STATE_IN_GAME 
     beq @handle_ingame_tick 
-    lda has_state_changed 
-    cmp #1 
-    beq @tick_done              ; if a state was changed lets finish this frame
-    lda game_state              
     cmp #GAME_STATE_PAUSED 
     beq @handle_paused_tick 
-    ;lda has_state_changed
-    ;cmp #1 
-    ;beq @tick_done             ; if a state was changed lets finish this frame
-    ;lda game_state              
     ;cmp #GAME_STATE_GAME_OVER 
     ;beq @handle_game_over 
+    
 @tick_done:
     rts 
 
-; Start Screen Loop ----------------------------------------------------
+; Start Screen Loop Tick ----------------------------------------------------
 @handle_startscreen_tick:
     jsr check_start_menu_input 
     jsr update_player_sprite 
     rts 
 
-; Gameplay Screen Loop ----------------------------------------------------
+; Gameplay Screen Loop Tick ----------------------------------------------------
 @handle_ingame_tick:
-    ;jsr parallax_tick 
     jsr process_game_input 
     lda player_xy_state 
     cmp #0
@@ -188,7 +181,7 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
     ;jsr ui_tick 
     rts 
 
-; Pause Loop ------------------------------------------------------------
+; Pause Loop Tick ------------------------------------------------------------
 @handle_paused_tick:
     jsr check_pause_input 
     rts 
@@ -205,47 +198,19 @@ custom_irq_handler:             ;------- Custom IRQ Handler
     beq @vsync_done             
     jsr game_tick_loop          ; run the game tick code every frame
 @vsync_done:                    ; continue to default IRQ handler backed up earlier
-   jmp (default_irq_vector)     ; RTI will happen after jump
+    jmp (default_irq_vector)     ; RTI will happen after jump
 
 irq_scanline_handler:           ; ------- SCAN Line IRQ Handler, multiple scan lines per frame
     sta VERA_ISR                ; Acknowledge the line IRQ 
-
     lda #ZSMKIT_BANK 
-    sta RAM_BANK             ; Set the current RAM bank
+    sta RAM_BANK                ; Set the current RAM bank
     lda #0
 	jsr zsm_tick                ; Call the ZSM tick function to update the sound engine                              
     jsr soundfx_play_irq 
-
     ply                         ; restore the registers
 	plx                         ; off the stack
 	pla                         ; which would normally happen on a normal IRQ 
 	rti                         ; exit the IRQ 
-
-;===================================================================
-; Other Game Subroutines
-;===================================================================
-;parallax_tick:                  ; scroll front layer (layer 1)
-;   
-;    lda VERA_L1_VSCROLL_L 
-;    clc 
-;    sbc #1
-;    sta VERA_L1_VSCROLL_L 
-;    lda VERA_L1_VSCROLL_H 
-;    sbc #0 
-;    sta VERA_L1_VSCROLL_H         
-;    dec parallax_scroll_delay   ; handle parallax delay
-;    bne @continue               
-;    lda VERA_L0_VSCROLL_L       ; scroll  (layer 0) 
-;    clc 
-;    sbc #1
-;    sta VERA_L0_VSCROLL_L 
-;    lda VERA_L0_VSCROLL_H 
-;    sbc #0
-;    sta VERA_L0_VSCROLL_H 
-; @continue:    
-;    lda #SPACE_DELAY            ; reset parallax counter
-;    sta parallax_scroll_delay 
-;    rts 
 
 movePlayer_tick:                ; Move the sprite by player speed and direction                             
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
@@ -284,7 +249,6 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
     adc #0                  
     sta player_sprite_x_h 
     bra @write_position
-
 @move_x_negative:
     lda #1                      ; Frame 1 for moving left
     sta player_sprite_index 
@@ -296,7 +260,6 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
     sbc #0            
     sta player_sprite_x_h 
     bra @write_position
-
 @move_y_positive:
     lda player_sprite_y_l  
     clc 
@@ -306,7 +269,6 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
     adc #0                
     sta player_sprite_y_h 
     bra @write_position
-
 @move_y_negative:
     lda player_sprite_y_l  
     sec 
@@ -316,7 +278,6 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
     sbc #0         
     sta player_sprite_y_h 
     rts                            
-
 @write_position:                ; Write updated position back to VRAM
     jsr check_boundaries  
 
@@ -390,7 +351,7 @@ check_boundaries:               ; check x max boundaries first
 update_player_sprite:
     lda player_sprite_index     ; Get current player frame index
     jsr get_sprite_frame_addr   ; Get sprite frame address  returns address ZP_PTR_1 and ZP_PTR_1+1  
-    
+
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda ZP_PTR_1                ; Write low byte of sprite frame address
     sta VERA_DATA0 
@@ -405,7 +366,6 @@ update_player_sprite:
     lda player_sprite_y_h       ; Write high byte of Y
     sta VERA_DATA0     
     rts 
-
 
 ; Gameplay Screen Init ------------------------------------------------------------
 gameplay_init:                   
@@ -456,11 +416,6 @@ gameplay_init:
     lda #%01110001              ; enable sprites, layer 1, layer 0, and output mode to VGA
     sta VERA_DC_VIDEO 
 
-    lda #1      ; Set cooldown timer
-    sta pause_cooldown 
-    ; Initialize game variables
-    ; lda #SPACE_DELAY            ; initialize our paralax counter
-    ; sta parallax_scroll_delay   
     rts 
 
 ; Start Screen Init ------------------------------------------------------------
@@ -577,4 +532,71 @@ pause_init:
 unpause:   
     rts 
 
+; ===================================================================
+; init_new_state - Initialize the newly entered state
+; ===================================================================
+init_new_state:
+    lda game_state 
+    cmp #GAME_STATE_START_SCREEN 
+    bne @check_ingame 
+    jsr startscreen_init 
+    rts 
+@check_ingame:
+    cmp #GAME_STATE_IN_GAME 
+    bne @check_paused
+    jsr play_sfx_sparkle 
+    jsr gameplay_init 
+    rts 
+@check_paused: 
+    cmp #GAME_STATE_PAUSED 
+    bne @check_ingame
+    jsr play_sfx_menu 
+    jsr pause_init 
+    rts 
+;@check_gameover:
+ ;   cmp #GAME_STATE_GAME_OVER
+ ;   bne @newstatedone
+    ; jsr gameover_init (if you add this later)
+;@newstatedone:
+ ;   rts
+
+;==========================================
+; request_state_change - Request a change to a new game state with delay
+; Input: A = new state to change to
+; ===================================================================
+request_state_change:
+    sta next_game_state          ; Store the requested state
+    lda #1
+    sta state_transition_active  ; Mark transition as active
+    lda #state_trans_delay 
+    sta state_transition_timer   ; Initialize the timer
+    lda #1
+    sta has_state_changed        ; Set the flag for current frame
+    rts
+
+; ===================================================================
+; handle_state_transitions - Process any ongoing state transitions
+; Must be called at the beginning of each game tick
+; ===================================================================
+handle_state_transitions:
+    lda state_transition_active 
+    beq @transitiondone                  ; If no transition active, we're done
+    
+    ; Transition is active, decrement timer
+    dec state_transition_timer 
+    bne @transitiondone                    ; If timer not zero yet, continue waiting
+    
+    ; Timer reached zero, perform the actual state change
+    lda next_game_state 
+    sta game_state               ; Set new game state
+    
+    ; Initialize the new state as needed
+    jsr init_new_state 
+    
+    ; Clear transition flags
+    stz state_transition_active 
+    stz has_state_changed 
+
+@transitiondone:
+    rts
 ; ------------------------------------ End of Game Subroutines

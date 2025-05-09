@@ -9,6 +9,7 @@ _INPUT_ASM = 1
 .include "x16.inc"
 .include "globals.asm"
 .include "soundfx.asm"
+.include "projectiles.asm" 
 
 ;|||||||||||||||||||||||||||||||| REFERENCES - JOYSTICK  ||||||||||||
 ;| ***********kernal supported joystick buttons to keys
@@ -50,87 +51,6 @@ joystick_latch:        .byte $CF ; last state of the joystick
 menu_selection:        .byte 0   ; Current selected menu item
 menu_delay:            .byte 0   ; Delay between menu movements
 
-; ===================================================================
-; Input Handling for Gameplay State
-; player_xy_state: 0 = no move | 1 = right | 2 = left | 3 = up | 4 = down
-; ===================================================================
-process_game_input:
-    stz player_xy_state             ; reset player direction to 0 (no move)
-    stz player_sprite_index         ; reset player sprite index to 0 (no move)
-    jsr GETIN                       ; Get keyboard input
-    cmp #KEY_ESCAPE                 ; Check if escape key is pressed
-    beq @pause_game                 ; If ESC pressed, unpause
-    jsr JOYSTICK_SCAN               ; Scan the joystick
-    lda #1                          ; joystick 1
-    jsr JOYSTICK_GET                ; check the first joystick 
-    cpy #0  
-    beq @check_prev_state           ; if no joystick fall through to check keyboard joystick
-    lda #0                          ; keyboard joystick 0
-    jsr JOYSTICK_GET    
-@check_prev_state:  
-    sta joystick_state              ; save the current state of the joystick
-    eor joystick_latch              ; exclusive OR the last state to check for button state changes
-    sta joystick_latch              ; save this for next time to see state changes
-    lda joystick_state              ; pull back in the current state
-    bit #%00001000                  ; Check UP
-    beq @perform_up  
-    bit #%00000100                  ; Check DOWN
-    beq @perform_down
-    bra @check_leftright
-@perform_up:  
-    lda #3                          ; set direction to up
-    sta player_xy_state  
-    bra @check_leftright  
-@perform_down:  
-    lda #4                          ; set direction to down
-    sta player_xy_state  
-    bra @check_leftright  
-@check_leftright:    
-    lda joystick_state  
-    bit #%00000010                  ; Check LEFT
-    beq @perform_left  
-    bit #%00000001                  ; Check RIGHT
-    beq @perform_right  
-    bra @check_start  
-@perform_left:  
-    lda #2                          ; set direction to left
-    sta player_xy_state   
-    bra @check_start
-@perform_right:  
-    lda #1                          ; set direction to right
-    sta player_xy_state  
-@check_start:  
-    bit #%00010000                  ; Check START button
-    bne @check_select  
-    lda joystick_latch  
-    bit #%00010000  
-    beq @check_select  
-@pause_game:               
-    ; Check if we're still in cooldown period
-    lda pause_cooldown 
-    beq @continue_pause_input    ; If zero, we can process input
-    dec pause_cooldown          ; Otherwise, decrement timer
-    bra @done                    ; And exit without processing input
-@continue_pause_input:         ; Start button pressed, pause game
-    lda #GAME_STATE_PAUSED          ; change state
-    sta game_state  
-    lda #1
-    sta has_state_changed           ; set a 1 as we changed state this frame
-    jsr play_sfx_menu 
-    jsr pause_init   
-    bra @done                       ; skip to done to avoid checking select button
-@check_select:  
-    lda joystick_latch  
-    bit #%00100000                  ; Check SELECT button
-    bne @done  
-    lda joystick_latch  
-    bit #%00100000  
-    beq @done  
-    ; TODO: Handle select button press here
-@done:
-    lda joystick_state 
-    sta joystick_latch 
-    rts 
 
 
 ; ===================================================================
@@ -139,7 +59,7 @@ process_game_input:
 check_start_menu_input:
     jsr GETIN                       ; Get keyboard input
     cmp #KEY_RETURN                 ; Check if return key is pressed
-    beq @start_game                ; reset player direction to 0 (no move)
+    beq @start_game                 ; reset player direction to 0 (no move)
     jsr JOYSTICK_SCAN               ; Scan the joystick
     lda #1                          ; joystick 1
     jsr JOYSTICK_GET                ; check the first joystick 
@@ -152,7 +72,7 @@ check_start_menu_input:
     eor joystick_latch             ; exclusive OR the last state to check for button state changes
     sta joystick_latch             ; save this for next time to see state changes
     lda joystick_state             ; pull back in the current state
-    
+
     bit #%00001000                 ; Check UP
     beq @menu_up  
     bit #%00000100                 ; Check DOWN
@@ -174,11 +94,12 @@ check_start_menu_input:
 
 @start_game: ;TODO check which menu we are on and set the game state accordingly
     lda #GAME_STATE_IN_GAME        ; Set game state to in-game
-    sta game_state 
-    lda #1
-    sta has_state_changed          ; set a 1 to we change state this frame
-    jsr play_sfx_sparkle 
-    jsr gameplay_init 
+    jsr request_state_change    ; Use the new transition system
+    ;sta game_state 
+    ;lda #1
+    ;sta has_state_changed          ; set a 1 to we change state this frame
+    ;jsr play_sfx_sparkle 
+    ;jsr gameplay_init 
                         
     rts 
 
@@ -214,17 +135,212 @@ check_pause_input:
     beq @done                       ; if not a new press then skip to check select button
 @unpause_game:
     lda #GAME_STATE_IN_GAME         ; Set game state to in-game
-    sta game_state 
-    lda #1
-    sta has_state_changed           ; set a 1 to we change state this frame
-    jsr play_sfx_menu
-    jsr unpause
-    jsr gameplay_init     
+    jsr request_state_change        ; Use the new transition system
+    ;sta game_state 
+    
+    ;lda #1
+    ;sta has_state_changed           ; set a 1 to we change state this frame
+    ;jsr play_sfx_menu
+    ;jsr unpause
+    ;jsr gameplay_init     
     
 
 @done:
     lda joystick_state              ; Update latch with current state
     sta joystick_latch              ; for next frame's comparison
+    rts 
+
+
+; ===================================================================
+; Input Handling for Gameplay State
+; player_xy_state: 0 = no move | 1 = right | 2 = left | 3 = up | 4 = down
+; ===================================================================
+process_game_input:
+    stz player_xy_state             ; reset player direction to 0 (no move)
+    stz player_sprite_index         ; reset player sprite index to 0 (no move)
+    jsr GETIN                       ; Get keyboard input
+    cmp #KEY_ESCAPE                 ; Check if escape key is pressed
+    beq @pause_game                 ; If ESC pressed, unpause
+    jsr JOYSTICK_SCAN               ; Scan the joystick
+    lda #1                          ; joystick 1
+    jsr JOYSTICK_GET                ; check the first joystick 
+    cpy #0  
+    beq @check_prev_state           ; if no joystick fall through to check keyboard joystick
+    lda #0                          ; keyboard joystick 0
+    jsr JOYSTICK_GET    
+@check_prev_state:  
+    sta joystick_state              ; save the current state of the joystick
+    eor joystick_latch              ; exclusive OR the last state to check for button state changes
+    sta joystick_latch              ; save this for next time to see state changes
+    lda joystick_state              ; pull back in the current state
+    
+    bit #%00001000                  ; Check UP
+    beq @perform_up  
+    bit #%00000100                  ; Check DOWN
+    beq @perform_down
+    bra @check_leftright
+@perform_up:  
+    lda #3                          ; set direction to up
+    sta player_xy_state  
+    bra @check_leftright  
+@perform_down:  
+    lda #4                          ; set direction to down
+    sta player_xy_state  
+    bra @check_leftright  
+@check_leftright:    
+    lda joystick_state  
+    bit #%00000010                  ; Check LEFT
+    beq @perform_left  
+    bit #%00000001                  ; Check RIGHT
+    beq @perform_right  
+    bra @check_start  
+@perform_left:  
+    lda #2                          ; set direction to left
+    sta player_xy_state   
+    bra @check_start
+@perform_right:  
+    lda #1                          ; set direction to right
+    sta player_xy_state  
+@check_start:  
+    bit #%00010000                  ; Check START button
+    bne @check_select  
+    lda joystick_latch  
+    bit #%00010000  
+    beq @check_select  
+@pause_game:               
+    bra @continue_pause_input 
+    ; Check if we're still in cooldown period
+    ;lda pause_cooldown 
+    ;beq @continue_pause_input    ; If zero, we can process input
+    ;dec pause_cooldown          ; Otherwise, decrement timer
+    bra @done                    ; And exit without processing input
+@continue_pause_input:         ; Start button pressed, pause game
+    lda #GAME_STATE_PAUSED          ; change state
+    jsr request_state_change        ; Use the new transition system
+    ;sta game_state  
+    ;lda #1
+    ;sta has_state_changed           ; set a 1 as we changed state this frame
+    ;jsr play_sfx_menu 
+    ;jsr pause_init   
+    bra @done                       ; skip to done to avoid checking select button
+@check_select:  
+    lda joystick_state 
+    bit #%00100000                  ; Check SELECT button
+    bne @check_fire  
+    lda joystick_latch  
+    bit #%00100000  
+    beq @check_fire 
+    ; TODO: Handle select button press here
+    bra @done 
+@check_fire:  
+    lda joystick_state 
+    bit #%10000000              ; Check bit 7 (fire button)
+    beq @done                   ; If not pressed, skip firing
+    lda joystick_latch 
+    bit #%10000000
+    beq @done   ; fire If not pressed last frame, fire now
+    bra @pause_game              
+
+    ; Already pressed, check for auto-fire if using rapid fire weapon
+    ;lda player_weapon_type 
+    ;cmp #PROJ_TYPE_RAPID
+    ;beq @check_autofire
+
+@done:
+    lda joystick_state 
+    sta joystick_latch 
+    rts 
+
+@check_autofire:
+    ; For rapid fire, we allow continuous firing
+    lda proj_cooldown
+    bne @done                  ; If still in cooldown, don't fire
+    
+@fire:
+    ; Set up starting position (offset from player position to center the projectile)
+    ; For 8x8 projectile from 16x16 player, add 4 pixels to center
+    lda player_sprite_x_l 
+    clc 
+    adc #4                      ; X offset to center projectile
+    sta ZP_PTR_1 
+    lda player_sprite_x_h 
+    adc #0                      ; Add carry
+    sta ZP_PTR_1 + 1
+    
+    lda player_sprite_y_l 
+    clc 
+    adc #4                      ; Y offset to center projectile
+    sta ZP_PTR_2 
+    lda player_sprite_y_h 
+    adc #0                      ; Add carry
+    sta ZP_PTR_2 + 1
+    
+    ; Determine firing direction based on player's sprite frame or joystick
+    jsr convert_movement_to_direction    ; Get player facing direction based on input or animation
+    
+    ; Handle spread shot - fire 3 projectiles in a fan pattern
+    ldx player_weapon_type 
+    cpx #PROJ_TYPE_SPREAD 
+    bne @standard_shot 
+    
+    ; For spread shot, fire 3 projectiles at different angles, Save the main direction to the stack
+    pha 
+    
+    ; Fire first projectile (angled left)
+    sec 
+    sbc #1                      ; One direction counter-clockwise
+    and #7                      ; Keep within 0-7 range
+    jsr fire_projectile 
+    
+    ; Fire second projectile (straight ahead)
+    pla                         ; Get original direction
+    pha                         ; Save it again
+    jsr fire_projectile 
+    
+    ; Fire third projectile (angled right)
+    pla                         ; Get original direction
+    clc
+    adc #1                      ; One direction clockwise
+    and #7                      ; Keep within 0-7 range
+    bra @do_fire 
+    
+@standard_shot:
+    ; Just fire a single projectile in the calculated direction, drop through to fire
+@do_fire:
+    ; Fire the projectile
+    jsr fire_projectile 
+    bra @done 
+    
+; ===================================================================
+; convert_movement_to_direction - Convert player_xy_state to direction
+; Input: A = player_xy_state (0=none, 1=right, 2=left, 3=up, 4=down)
+; Output: A = direction (0=up, 1=up-right, 2=right, etc.)
+; ===================================================================
+convert_movement_to_direction:
+    ; If no movement, use the sprite index or default to right
+    cmp #0
+    bne @has_movement
+    lda player_sprite_index      ; No movement, use sprite index for direction
+    and #7                      ; Ensure it's in range 0-7
+    rts 
+@has_movement:
+    ; Convert from player_xy_state to 8-way direction
+    cmp #1                      ; Right?
+    bne @check_left
+    lda #2                      ; Direction 2 = right
+    rts 
+@check_left:    ; Left?
+    cmp #2                      
+    bne @check_up
+    lda #6                      ; Direction 6 = left
+    rts 
+@check_up:     ; Up?
+    cmp #3                      
+    bne @check_down
+    lda #0                      ; Direction 0 = up
+    rts 
+@check_down:  ; Must be down (4)
+    lda #4                      ; Direction 4 = down
     rts 
 
 

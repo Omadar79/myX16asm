@@ -3,8 +3,8 @@
 ; Programmer:   Dustin Taub
 ; Description:  Projectile management system for the game
 ; ===================================================================
-.ifndef _PROJ_MANAGER_ASM
-_PROJ_MANAGER_ASM = 1
+.ifndef _PROJECTILES_ASM
+_PROJECTILES_ASM = 1
 
 .include "x16.inc"
 .include "globals.asm"
@@ -99,9 +99,9 @@ fire_projectile:
 @no_slots:
     ; No slots available
     pla                         ; Clean up stack
-    pla
+    pla 
     sec                         ; Set carry to indicate failure
-    rts
+    rts 
     
 @slot_found:
     ; Set cooldown based on projectile type
@@ -149,11 +149,11 @@ fire_projectile:
     sta proj_y_pos_h,x
     
     ; Set projectile type
-    pla                         ; Restore projectile type
+    pla                         ; Restore projectile type from stack
     sta proj_type,x
     
     ; Set projectile direction based on input
-    pla                         ; Restore direction
+    pla                         ; Restore direction from stack
     pha                         ; Save it again for later
     
     ; Convert from 8-direction format to x/y components
@@ -196,12 +196,9 @@ fire_projectile:
     
 @update_sprite:
     plx                         ; Restore X register
-    
-    ; Update sprite in VERA
     jsr update_projectile_sprite
-    
     clc                         ; Clear carry to indicate success
-    rts
+    rts 
 
 ; ===================================================================
 ; update_projectiles - Update all projectiles (call once per frame)
@@ -223,7 +220,33 @@ update_projectiles:
     dec proj_lifetime,x         ; Reduce lifetime by 1
     beq @deactivate             ; If lifetime reached 0, deactivate
     
-@update_x:
+    ; Update position (call subroutine instead of inline code)
+    jsr update_projectile_pos
+    
+    ; Check bounds (call subroutine)
+    jsr check_projectile_bounds
+    bcs @deactivate             ; If out of bounds, deactivate
+    
+    ; Update sprite
+    jsr update_projectile_sprite
+    jmp @next_projectile
+    
+@deactivate:
+    lda #PROJ_INACTIVE
+    sta proj_states,x
+    jsr disable_projectile_sprite
+    
+@next_projectile:
+    inx                         ; Move to next projectile
+    cpx #PROJ_MAX_COUNT         ; Have we processed all projectiles?
+    bne @update_one             ; If not, continue
+    rts
+
+; ===================================================================
+; update_projectile_pos - Update position of a projectile
+; Input: X = projectile index
+; ===================================================================
+update_projectile_pos:
     ; Update X position
     lda proj_dir_x,x            ; Get X direction
     beq @update_y               ; If 0, no change in X
@@ -239,7 +262,7 @@ update_projectiles:
     lda proj_x_pos_h,x          ; Get X high byte
     adc #0                      ; Add carry
     sta proj_x_pos_h,x          ; Store result
-    bra @update_y
+    jmp @update_y
     
 @move_left:
     lda proj_x_pos_l,x          ; Get X low byte
@@ -253,7 +276,7 @@ update_projectiles:
 @update_y:
     ; Update Y position
     lda proj_dir_y,x            ; Get Y direction
-    beq @check_bounds           ; If 0, no change in Y
+    beq @done                   ; If 0, no change in Y
     
     cmp #1                      ; Check if direction is positive (down)
     bne @move_up                ; If not 1, must be 2 (up)
@@ -266,27 +289,33 @@ update_projectiles:
     lda proj_y_pos_h,x          ; Get Y high byte
     adc #0                      ; Add carry
     sta proj_y_pos_h,x          ; Store result
-    bra @check_bounds
+    rts
     
 @move_up:
     lda proj_y_pos_l,x          ; Get Y low byte
     sec
     sbc #PROJ_SPEED             ; Subtract speed
     sta proj_y_pos_l,x          ; Store result
-    lda proj_y_pos_h,x          ; Get Y high byte
+    lda proj_y_pos_h,x          ; Get X high byte
     sbc #0                      ; Subtract borrow
     sta proj_y_pos_h,x          ; Store result
-    
-@check_bounds:
-    ; Check if projectile is out of bounds
+@done:
+    rts
+
+; ===================================================================
+; check_projectile_bounds - Check if projectile is out of bounds
+; Input: X = projectile index
+; Output: Carry set if out of bounds, clear if in bounds
+; ===================================================================
+check_projectile_bounds:
     ; Check X position (too far right)
     lda proj_x_pos_h,x          ; High byte of X position
     cmp #SCREEN_MAX_X_H         ; Compare with max X high byte
     bcc @check_x_min            ; If less, check X minimum
-    bne @deactivate             ; If greater, deactivate
+    bne @out_of_bounds          ; If greater, out of bounds
     lda proj_x_pos_l,x          ; Low byte of X position
     cmp #SCREEN_MAX_X_L         ; Compare with max X low byte
-    bcs @deactivate             ; If greater or equal, deactivate
+    bcs @out_of_bounds          ; If greater or equal, out of bounds
     
 @check_x_min:
     ; Check X position (too far left)
@@ -295,45 +324,34 @@ update_projectiles:
     bne @check_y_max            ; If not equal, check Y maximum
     lda proj_x_pos_l,x          ; Low byte of X position
     cmp #SCREEN_MIN_X_L         ; Compare with min X low byte
-    bcc @deactivate             ; If less, deactivate
+    bcc @out_of_bounds          ; If less, out of bounds
     
 @check_y_max:
     ; Check Y position (too far down)
     lda proj_y_pos_h,x          ; High byte of Y position
     cmp #SCREEN_MAX_Y_H         ; Compare with max Y high byte
     bcc @check_y_min            ; If less, check Y minimum
-    bne @deactivate             ; If greater, deactivate
+    bne @out_of_bounds          ; If greater, out of bounds
     lda proj_y_pos_l,x          ; Low byte of Y position
     cmp #SCREEN_MAX_Y_L         ; Compare with max Y low byte
-    bcs @deactivate             ; If greater or equal, deactivate
+    bcs @out_of_bounds          ; If greater or equal, out of bounds
     
 @check_y_min:
     ; Check Y position (too far up)
     lda proj_y_pos_h,x          ; High byte of Y position
     cmp #SCREEN_MIN_Y_H         ; Compare with min Y high byte
-    bne @continue               ; If not equal, continue
+    bne @in_bounds              ; If not equal, in bounds
     lda proj_y_pos_l,x          ; Low byte of Y position
     cmp #SCREEN_MIN_Y_L         ; Compare with min Y low byte
-    bcc @deactivate             ; If less, deactivate
+    bcc @out_of_bounds          ; If less, out of bounds
     
-@continue:
-    ; Projectile is within bounds, update sprite
-    jsr update_projectile_sprite
-    bra @next_projectile
+@in_bounds:
+    clc                         ; Clear carry to indicate in bounds
+    rts 
     
-@deactivate:
-    lda #PROJ_INACTIVE
-    sta proj_states,x
-    
-    ; Disable sprite in VERA
-    jsr disable_projectile_sprite
-    
-@next_projectile:
-    inx                         ; Move to next projectile
-    cpx #PROJ_MAX_COUNT         ; Have we processed all projectiles?
-    bne @update_one             ; If not, continue
-    
-    rts
+@out_of_bounds:
+    sec                         ; Set carry to indicate out of bounds
+    rts 
 
 ; ===================================================================
 ; update_projectile_sprite - Update sprite attributes for projectile
@@ -341,94 +359,85 @@ update_projectiles:
 ;   X = Projectile index
 ; ===================================================================
 update_projectile_sprite:
-    phx                         ; Save X register
-    
+    phx                         ; Save X register to the stac
     ; Calculate sprite attribute address
     txa                         ; Get projectile index
     asl                         ; Multiply by 8 (each sprite attr is 8 bytes)
-    asl
-    asl
-    clc
+    asl 
+    asl 
+    clc 
     adc #<sp_att_playerproj     ; Add base address
     sta ZP_PTR_3                ; Store low byte
-    lda #>sp_att_playerproj
+    lda #>sp_att_playerproj 
     adc #0                      ; Add carry
-    sta ZP_PTR_3+1              ; Store high byte
+    sta ZP_PTR_3 + 1            ; Store high byte
     
     ; Set VERA address to sprite attribute
-    lda ZP_PTR_3+1              ; Set high byte
-    sta VERA_ADDR_HIGH
+    lda ZP_PTR_3 + 1            ; Set high byte
+    sta VERA_ADDR_HIGH 
     lda ZP_PTR_3                ; Set low byte
-    sta VERA_ADDR_LOW
+    sta VERA_ADDR_LOW 
     lda #%00010001              ; Auto-increment = 1, bank = 1
-    sta VERA_ADDR_BANK
+    sta VERA_ADDR_BANK 
     
     ; Determine which sprite frame to use based on projectile type and direction
     plx                         ; Restore X register to get projectile index
     phx                         ; Save it again
     
-    lda proj_type,x             ; Get projectile type
+    lda proj_type , x           ; Get projectile type
     asl                         ; Multiply by 8 (8 directions per type)
-    asl
-    asl
+    asl 
+    asl 
     
     ; Add direction offset (0-7)
-    ldy proj_dir_y,x            ; Check Y direction first
+    ldy proj_dir_y , x          ; Check Y direction first
     cpy #2                      ; Is it up (2)?
     beq @dir_up                 
     cpy #1                      ; Is it down (1)?
     beq @dir_down
-    ldy proj_dir_x,x            ; Y is 0, check X
+    ldy proj_dir_x , x          ; Y is 0, check X
     cpy #2                      ; Is it left (2)?
     beq @dir_left
-    clc
+    clc 
     adc #2                      ; Right (dir 2)
     bra @set_sprite_frame
-
 @dir_up:
-    ldy proj_dir_x,x        ; Check X component
+    ldy proj_dir_x , x      ; Check X component
     cpy #2                  ; Is it left (2)?
     beq @dir_up_left        
     cpy #0                  ; Is it center (0)?
     beq @dir_up_straight    
-    clc
+    clc 
     adc #1                  ; Up-right (dir 1)
     bra @set_sprite_frame
-    
 @dir_up_straight:
-    clc
+    clc 
     adc #0                  ; Up (dir 0)
     bra @set_sprite_frame
-    
 @dir_up_left:
-    clc
+    clc 
     adc #7                  ; Up-left (dir 7)
     bra @set_sprite_frame
-    
 @dir_left:
-    clc
+    clc 
     adc #6                  ; Left (dir 6)
     bra @set_sprite_frame
-    
 @dir_down:
-    ldy proj_dir_x,x        ; Check X component
+    ldy proj_dir_x , x      ; Check X component
     cpy #2                  ; Is it left (2)?
     beq @dir_down_left      
     cpy #0                  ; Is it center (0)?
     beq @dir_down_straight  
-    clc
+    clc 
     adc #3                  ; Down-right (dir 3)
     bra @set_sprite_frame
-    
 @dir_down_straight:
-    clc
+    clc 
     adc #4                  ; Down (dir 4)
     bra @set_sprite_frame
-    
 @dir_down_left:
-    clc
+    clc 
     adc #5                  ; Down-left (dir 5)
-    
 @set_sprite_frame:
     ; A now contains projectile frame index
     jsr get_small_sprite_frame_addr ; Get the address for this small sprite
@@ -438,19 +447,16 @@ update_projectile_sprite:
     sta VERA_DATA0 
     lda ZP_PTR_1+1              ; Sprite frame address (high byte)
     sta VERA_DATA0 
-    
     plx                         ; Restore X register to get projectile index
     
     lda proj_x_pos_l,x          ; X position (low byte)
     sta VERA_DATA0 
     lda proj_x_pos_h,x          ; X position (high byte)
     sta VERA_DATA0 
-    
     lda proj_y_pos_l,x          ; Y position (low byte)
     sta VERA_DATA0 
     lda proj_y_pos_h,x          ; Y position (high byte)
     sta VERA_DATA0 
-    
     lda #%00001100              ; Z-depth: In front of layer 1
     sta VERA_DATA0 
     
@@ -480,8 +486,7 @@ update_projectile_sprite:
     
 @write_mode:
     sta VERA_DATA0
-    
-    rts
+    rts 
 
 ; ===================================================================
 ; disable_projectile_sprite - Disable sprite for projectile
@@ -494,128 +499,30 @@ disable_projectile_sprite:
     ; Calculate sprite attribute address
     txa                         ; Get projectile index
     asl                         ; Multiply by 8 (each sprite attr is 8 bytes)
-    asl
-    asl
-    clc
+    asl 
+    asl 
+    clc 
     adc #<sp_att_playerproj     ; Add base address
     sta ZP_PTR_3                ; Store low byte
-    lda #>sp_att_playerproj
+    lda #>sp_att_playerproj 
     adc #0                      ; Add carry
-    sta ZP_PTR_3+1              ; Store high byte
+    sta ZP_PTR_3 + 1            ; Store high byte
     
     ; Set VERA address to sprite attribute Z-depth byte (6th byte)
-    lda ZP_PTR_3+1              ; Set high byte
-    sta VERA_ADDR_HIGH
+    lda ZP_PTR_3 + 1            ; Set high byte
+    sta VERA_ADDR_HIGH 
     lda ZP_PTR_3                ; Set low byte 
-    clc
+    clc 
     adc #6                      ; Skip to Z-depth byte
-    sta VERA_ADDR_LOW
+    sta VERA_ADDR_LOW 
     lda #%00000001              ; No auto-increment, bank = 1
-    sta VERA_ADDR_BANK
-    
+    sta VERA_ADDR_BANK 
     ; Disable sprite by setting Z-depth to 0
     lda #0                      ; Z-depth 0 = disabled
-    sta VERA_DATA0
-    
+    sta VERA_DATA0 
     plx                         ; Restore X register
-    rts
+    rts 
 
-; ===================================================================
-; handle_player_shooting - Check input and fire projectiles if needed
-; ===================================================================
-handle_player_shooting:
-    ; Check if fire button is pressed
-    lda joystick_state
-    bit #%10000000              ; Check bit 7 (fire button)
-    beq @no_fire
-    
-    ; Check if it was just pressed this frame
-    lda joystick_latch
-    bit #%10000000
-    beq @no_fire                ; If not pressed last frame, fire now
-    
-    ; Already pressed, check for auto-fire if using rapid fire weapon
-    lda player_weapon_type 
-    cmp #PROJ_TYPE_RAPID
-    beq @check_autofire
-    
-    ; Not rapid fire and button was already down, don't fire
-    bra @no_fire
-    
-@check_autofire:
-    ; For rapid fire, we allow continuous firing
-    lda proj_cooldown
-    bne @no_fire                ; If still in cooldown, don't fire
-    
-    ; Set up starting position (offset from player position to center the projectile)
-    ; For 8x8 projectile from 16x16 player, add 4 pixels to center
-@fire:
-    lda player_sprite_x_l
-    clc
-    adc #4                      ; X offset to center projectile
-    sta ZP_PTR_1
-    lda player_sprite_x_h
-    adc #0                      ; Add carry
-    sta ZP_PTR_1+1
-    
-    lda player_sprite_y_l
-    clc
-    adc #4                      ; Y offset to center projectile
-    sta ZP_PTR_2
-    lda player_sprite_y_h
-    adc #0                      ; Add carry
-    sta ZP_PTR_2+1
-    
-    ; Determine firing direction based on player's sprite frame
-    lda player_sprite_index
-    
-    ; Convert sprite frame to direction
-    ; 0 = facing up, 1 = facing right, etc.
-    asl                          ; Multiply by 2 to match our 8-direction system
-    
-    ; If not moving, fire in the facing direction
-    cmp #0
-    bne @direction_ok
-    lda #2                       ; Default to right if not moving
-    
-@direction_ok:
-    ; Handle spread shot - fire 3 projectiles in a fan pattern
-    ldx player_weapon_type
-    cpx #PROJ_TYPE_SPREAD
-    bne @standard_shot
-    
-    ; For spread shot, fire 3 projectiles at different angles
-    ; Save the main direction
-    pha
-    
-    ; Fire first projectile (angled left)
-    sec
-    sbc #1                      ; One direction counter-clockwise
-    and #7                      ; Keep within 0-7 range
-    jsr fire_projectile
-    
-    ; Fire second projectile (straight ahead)
-    pla                         ; Get original direction
-    pha                         ; Save it again
-    jsr fire_projectile
-    
-    ; Fire third projectile (angled right)
-    pla                         ; Get original direction
-    clc
-    adc #1                      ; One direction clockwise
-    and #7                      ; Keep within 0-7 range
-    bra @do_fire
-    
-@standard_shot:
-    ; Just fire a single projectile in the calculated direction
-@do_fire:
-    ; Fire the projectile
-    jsr fire_projectile
-    
-@no_fire:
-    rts
 
-; ===================================================================
-; End of file
-; ===================================================================
+
 .endif
