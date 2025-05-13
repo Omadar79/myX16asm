@@ -46,7 +46,7 @@ get_sprite_frame_addr:
     ; A: actual sprite frame index   
     ; OUTPUT:  ZP_PTR_1 frame (low byte) | ZP_PTR_1+1 (high byte)
     asl                         ; × 2
-    asl                         ; × 4  to get 4 bytes per sprite 
+    asl                         ; × 4  x (32) = 128 bytes per sprite
     sta ZP_PTR_2 
     lda #<(VRAM_SPRITES >> 5)
     clc 
@@ -57,6 +57,24 @@ get_sprite_frame_addr:
     sta ZP_PTR_1 + 1    
     rts 
 
+get_small_sprite_frame_addr: 
+    ; A: actual sprite frame index   
+    ; OUTPUT: ZP_PTR_1 frame (low byte) | ZP_PTR_1+1 (high byte)
+    ;asl                         ; no shift (32 bytes is already 5 shifts )
+  
+    
+    sta ZP_PTR_2                ; Store calculated offset temporarily
+
+    lda #<(VRAM_SMALL_SPRITES >> 5)
+    ;lda #<VRAM_SMALL_SPRITES 
+    clc 
+    adc ZP_PTR_2                ; Add offset to base address
+    sta ZP_PTR_1                ; Store low byte of result
+
+    lda #>(VRAM_SMALL_SPRITES >> 5)
+    adc #0                      ; Add carry from low byte addition
+    sta ZP_PTR_1 + 1            ; Store high byte of result
+    rts 
 
 ; ===================================================================
 ; update_sprite - Updates a sprite's attributes in VERA memory
@@ -199,30 +217,5 @@ build_sprite_ui:
 
     rts 
 
-; ===================================================================
-; get_small_sprite_frame_addr - Get address for small sprite 8x8
-; Inputs:
-;   A: small sprite frame index
-; Outputs:
-;   ZP_PTR_1, ZP_PTR_1+1: frame address
-; ===================================================================
-get_small_sprite_frame_addr: 
-    ; A: actual sprite frame index   
-    ; OUTPUT: ZP_PTR_1 frame (low byte) | ZP_PTR_1+1 (high byte)
-    asl                         ; × 2
-    asl                         ; × 4 to get 4 bytes per sprite (8x8 sprites use 4 bytes)
-    sta ZP_PTR_3                ; Store calculated offset temporarily
-    
-    ; Base address of small sprites in VRAM divided by 32 (>> 5)
-    ; This is the format VERA sprites use for addressing
-    lda #<(VRAM_SMALL_SPRITES >> 5)
-    clc 
-    adc ZP_PTR_3                ; Add offset to base address
-    sta ZP_PTR_1                ; Store low byte of result
-    
-    lda #>(VRAM_SMALL_SPRITES >> 5)
-    adc #0                      ; Add carry from low byte addition
-    sta ZP_PTR_1+1              ; Store high byte of result
-    
-    rts
+
 .endif

@@ -177,6 +177,7 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
     jsr movePlayer_tick    
 @ingame_tick:
     jsr update_player_sprite 
+    jsr update_projectiles 
     ;jsr update_ui_sprite 
     ;jsr ui_tick 
     rts 
@@ -560,10 +561,7 @@ init_new_state:
 ;@newstatedone:
  ;   rts
 
-;==========================================
-; request_state_change - Request a change to a new game state with delay
-; Input: A = new state to change to
-; ===================================================================
+
 request_state_change:
     sta next_game_state          ; Store the requested state
     lda #1
@@ -574,10 +572,6 @@ request_state_change:
     sta has_state_changed        ; Set the flag for current frame
     rts
 
-; ===================================================================
-; handle_state_transitions - Process any ongoing state transitions
-; Must be called at the beginning of each game tick
-; ===================================================================
 handle_state_transitions:
     lda state_transition_active 
     beq @transitiondone                  ; If no transition active, we're done
@@ -598,5 +592,5 @@ handle_state_transitions:
     stz has_state_changed 
 
 @transitiondone:
-    rts
+    rts 
 ; ------------------------------------ End of Game Subroutines

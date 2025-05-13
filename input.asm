@@ -83,29 +83,25 @@ check_start_menu_input:
 @menu_up:  
     lda #132                         ; set direction to up
     sta player_sprite_y_l  
-    jsr play_sfx_shoot
+    jsr play_sfx_laser 
     bra @done_start_menu     
 
 @menu_down:  
     lda #152                         ; set direction to down
     sta player_sprite_y_l 
-    jsr play_sfx_laser
+    jsr play_sfx_laser 
     bra @done_start_menu  
 
 @start_game: ;TODO check which menu we are on and set the game state accordingly
     lda #GAME_STATE_IN_GAME        ; Set game state to in-game
     jsr request_state_change    ; Use the new transition system
-    ;sta game_state 
-    ;lda #1
-    ;sta has_state_changed          ; set a 1 to we change state this frame
-    ;jsr play_sfx_sparkle 
-    ;jsr gameplay_init 
                         
     rts 
 
 @done_start_menu:
     lda joystick_state             ; Update latch with current state
     sta joystick_latch             ; for next frame's comparison
+
     rts 
 
 ; ===================================================================
@@ -136,18 +132,11 @@ check_pause_input:
 @unpause_game:
     lda #GAME_STATE_IN_GAME         ; Set game state to in-game
     jsr request_state_change        ; Use the new transition system
-    ;sta game_state 
-    
-    ;lda #1
-    ;sta has_state_changed           ; set a 1 to we change state this frame
-    ;jsr play_sfx_menu
-    ;jsr unpause
-    ;jsr gameplay_init     
-    
 
 @done:
     lda joystick_state              ; Update latch with current state
     sta joystick_latch              ; for next frame's comparison
+
     rts 
 
 
@@ -208,20 +197,8 @@ process_game_input:
     bit #%00010000  
     beq @check_select  
 @pause_game:               
-    bra @continue_pause_input 
-    ; Check if we're still in cooldown period
-    ;lda pause_cooldown 
-    ;beq @continue_pause_input    ; If zero, we can process input
-    ;dec pause_cooldown          ; Otherwise, decrement timer
-    bra @done                    ; And exit without processing input
-@continue_pause_input:         ; Start button pressed, pause game
     lda #GAME_STATE_PAUSED          ; change state
-    jsr request_state_change        ; Use the new transition system
-    ;sta game_state  
-    ;lda #1
-    ;sta has_state_changed           ; set a 1 as we changed state this frame
-    ;jsr play_sfx_menu 
-    ;jsr pause_init   
+    jsr request_state_change        ; Use the new transition system  
     bra @done                       ; skip to done to avoid checking select button
 @check_select:  
     lda joystick_state 
@@ -235,12 +212,13 @@ process_game_input:
 @check_fire:  
     lda joystick_state 
     bit #%10000000              ; Check bit 7 (fire button)
-    beq @done                   ; If not pressed, skip firing
+    bne @done                   ; If not pressed move to done
     lda joystick_latch 
     bit #%10000000
     beq @done   ; fire If not pressed last frame, fire now
-    bra @pause_game              
-
+    
+   
+    bra @fire ; Fire the projectile
     ; Already pressed, check for auto-fire if using rapid fire weapon
     ;lda player_weapon_type 
     ;cmp #PROJ_TYPE_RAPID
@@ -257,6 +235,8 @@ process_game_input:
     bne @done                  ; If still in cooldown, don't fire
     
 @fire:
+   
+    
     ; Set up starting position (offset from player position to center the projectile)
     ; For 8x8 projectile from 16x16 player, add 4 pixels to center
     lda player_sprite_x_l 
@@ -274,41 +254,48 @@ process_game_input:
     lda player_sprite_y_h 
     adc #0                      ; Add carry
     sta ZP_PTR_2 + 1
-    
+    bra @standard_shot 
     ; Determine firing direction based on player's sprite frame or joystick
-    jsr convert_movement_to_direction    ; Get player facing direction based on input or animation
+    ;jsr convert_movement_to_direction    ; Get player facing direction based on input or animation
     
     ; Handle spread shot - fire 3 projectiles in a fan pattern
-    ldx player_weapon_type 
-    cpx #PROJ_TYPE_SPREAD 
-    bne @standard_shot 
+    ;ldx player_weapon_type 
+    ;cpx #PROJ_TYPE_SPREAD 
+    ;bne @standard_shot 
     
     ; For spread shot, fire 3 projectiles at different angles, Save the main direction to the stack
-    pha 
-    
-    ; Fire first projectile (angled left)
-    sec 
-    sbc #1                      ; One direction counter-clockwise
-    and #7                      ; Keep within 0-7 range
-    jsr fire_projectile 
-    
-    ; Fire second projectile (straight ahead)
-    pla                         ; Get original direction
-    pha                         ; Save it again
-    jsr fire_projectile 
-    
-    ; Fire third projectile (angled right)
-    pla                         ; Get original direction
-    clc
-    adc #1                      ; One direction clockwise
-    and #7                      ; Keep within 0-7 range
-    bra @do_fire 
+    ;pha 
+    ;
+    ;; Fire first projectile (angled left)
+    ;sec 
+    ;sbc #1                      ; One direction counter-clockwise
+    ;and #7                      ; Keep within 0-7 range
+    ;jsr fire_projectile 
+    ;
+    ;; Fire second projectile (straight ahead)
+    ;pla                         ; Get original direction
+    ;pha                         ; Save it again
+    ;jsr fire_projectile 
+    ;
+    ;; Fire third projectile (angled right)
+    ;pla                         ; Get original direction
+    ;clc 
+    ;adc #1                      ; One direction clockwise
+    ;and #7                      ; Keep within 0-7 range
+    ;bra @do_fire 
     
 @standard_shot:
     ; Just fire a single projectile in the calculated direction, drop through to fire
+    ldx #0 ;  X = Projectile type (0=standard, 1=spread, etc.)
+    ;   ZP_PTR_1, ZP_PTR_1+1 = Starting X position
+    ;   ZP_PTR_2, ZP_PTR_2+1 = Starting Y position
+    lda #0
+    ;   A = Direction (0=up, 1=up-right, 2=right, etc. - 8 directions)
 @do_fire:
     ; Fire the projectile
-    jsr fire_projectile 
+    jsr fire_projectile    
+   
+
     bra @done 
     
 ; ===================================================================

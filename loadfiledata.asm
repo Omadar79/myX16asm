@@ -16,14 +16,9 @@ spritesmall_fn:              .asciiz "spritesm.bin"
 tiles_fn:                .asciiz "tiles.bin"
 startscreen_fn:          .asciiz "cover.bin"
 uimap_fn:                .asciiz "uimap.bin"
-;zsmkit_fn:  	         .asciiz "zsmkit.bin"
-;song_fn:                 .asciiz "song1.zsm"
 
-;music_fn:                .asciiz "musictst.bin"
 ;palette_fn:                .asciiz "pal.bin"
 ;spriteattr_fn:             .asciiz "sprtattr.bin"
-
-
 
 
 ; ===================================================================
@@ -109,16 +104,16 @@ loadtoram:
     ldx ZP_PTR_1 + 1            ; X = index into filenames
     stx ZP_PTR_2 
     ldy #>filenames             ; Y = high byte of filenames table
-    sty ZP_PTR_2 + 1  ; store high byte of filename address in ZP_PTR_2 + 1
+    sty ZP_PTR_2 + 1            ; store high byte of filename address in ZP_PTR_2 + 1
     ldy #0
 @loop:
-    lda (ZP_PTR_2) , y; filename address
-    beq @foundnull    ; jump if null terminator found
-    iny               ; increment Y to next character
-    jmp @loop         ; loop until null terminator is found
-@foundnull:           
-    tya               ; A = filename length
-    ldy #>filenames   ; Y = high byte of filename address (fixed spacing issue)
+    lda (ZP_PTR_2) , y          ; filename address
+    beq @foundnull              ; jump if null terminator found
+    iny                         ; increment Y to next character
+    jmp @loop                   ; loop until null terminator is found
+@foundnull:                     
+    tya                         ; A = filename length
+    ldy #>filenames             ; Y = high byte of filename address (fixed spacing issue)
     jsr SETNAM 
 
     ; Set up load destination   
@@ -133,7 +128,6 @@ loadtoram:
     rts 
 
 
-
 ; ===================================================================
 ; loadbankedtovram
 ; Inputs:
@@ -142,22 +136,22 @@ loadtoram:
 ;   Y = VRAM destination address low byte (7:0)
 ; ===================================================================
 loadbankedtovram:
-    sta ZP_PTR_1            ; Store RAM source address high byte in ZP
-    stx ZP_PTR_2            ; Store VRAM destination address high byte in ZP
-    sty ZP_PTR_2 + 1        ; Store VRAM destination address low byte in ZP
-    lda #0                  ; Start with low byte of RAM source address
-    sta ZP_PTR_1 + 1        ; Set low byte of RAM source address to 0
-@transfer_loop:
-    lda (ZP_PTR_1),y        ; Load byte from RAM source
-    sta (ZP_PTR_2),y        ; Store byte to VRAM destination
-    iny                     ; Increment low byte of VRAM address
-    bne @transfer_loop      ; Continue if low byte hasn't wrapped around
-    inc ZP_PTR_1            ; Increment high byte of RAM source address
-    inc ZP_PTR_2 + 1        ; Increment high byte of VRAM destination low byte
-    lda ZP_PTR_1            ; Check if RAM source address has reached the end
-    cmp #$A0                ; Assuming $A0 is the end of the RAM bank
-    bcc @transfer_loop      ; Continue if not reached
-    rts                     ; Return from subroutine
+    sta ZP_PTR_1                ; Store RAM source address high byte in ZP
+    stx ZP_PTR_2                ; Store VRAM destination address high byte in ZP
+    sty ZP_PTR_2 + 1            ; Store VRAM destination address low byte in ZP
+    lda #0                      ; Start with low byte of RAM source address
+    sta ZP_PTR_1 + 1            ; Set low byte of RAM source address to 0
+@transfer_loop: 
+    lda (ZP_PTR_1) , y          ; Load byte from RAM source
+    sta (ZP_PTR_2) , y          ; Store byte to VRAM destination
+    iny                         ; Increment low byte of VRAM address
+    bne @transfer_loop          ; Continue if low byte hasn't wrapped around
+    inc ZP_PTR_1                ; Increment high byte of RAM source address
+    inc ZP_PTR_2 + 1            ; Increment high byte of VRAM destination low byte
+    lda ZP_PTR_1                ; Check if RAM source address has reached the end
+    cmp #$A0                    ; Assuming $A0 is the end of the RAM bank
+    bcc @transfer_loop          ; Continue if not reached
+    rts                         ; Return from subroutine
 
 
 

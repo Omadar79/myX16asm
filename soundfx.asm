@@ -91,56 +91,56 @@ sfx_data_store: .res 4, 0
 ; ======================================================================
 play_sfx_ping:
     ldx #0                  ; Offset to ping sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_shoot:
     ldx #10                 ; Offset to shoot sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_zap:
     ldx #20                 ; Offset to zap sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_explode:
     ldx #30                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_squee_up:
     ldx #40                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_squee_down:
     ldx #50                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_jump:
     ldx #60                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_smallboom:
     ldx #70                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_menu:
     ldx #80                 ; Offset to zap sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 ; Play the 'explode' sound effect
 play_sfx_smallbounce:
     ldx #90                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_sparkle:
     ldx #100                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_gameover:
     ldx #110                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_land:
     ldx #120                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_gasup:
     ldx #130                ; Offset to test sound 
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_blaster:
     ldx #140                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_laser:
     ldx #150                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_photon:
     ldx #160                 ; Offset to explode sound envelope
-    jmp common_sfx_play
+    jmp common_sfx_play 
 play_sfx_plasma:
     ldx #170                 ; Offset to explode sound envelope
 
@@ -150,8 +150,8 @@ play_sfx_plasma:
 common_sfx_play:
     ldy #0                  ; Copy sound parameters
 @copy_loop:
-    lda sfx_sounds,x        ; Get parameter from sound table
-    sta sfx_channel,y       ; Store in our parameter block
+    lda sfx_sounds , x      ; Get parameter from sound table
+    sta sfx_channel , y     ; Store in our parameter block
     inx 
     iny 
     cpy #10                 ; Copy all 10 bytes
@@ -167,7 +167,7 @@ common_sfx_play:
     sta sfx_running
 
 @return:
-    rts
+    rts 
 
 
 ; ======================================================================
@@ -176,17 +176,17 @@ common_sfx_play:
 soundfx_play_irq:
     
     ; Save VERA registers
-    lda VERA_ADDR_LOW
+    lda VERA_ADDR_LOW 
     sta sfx_data_store
-    lda VERA_ADDR_HIGH
-    sta sfx_data_store+1
+    lda VERA_ADDR_HIGH 
+    sta sfx_data_store + 1
     lda VERA_ADDR_BANK
-    sta sfx_data_store+2
+    sta sfx_data_store + 2
     lda VERA_CTRL
-    sta sfx_data_store+3
+    sta sfx_data_store + 3
 
     ; Process based on current phase
-    lda sfx_phase
+    lda sfx_phase 
     beq @done_irq               ; If phase = 0, nothing to do
     
     cmp #1
@@ -199,22 +199,22 @@ soundfx_play_irq:
     ; Set up VERA address to PSG channel 15
     stz VERA_CTRL             ; Select data port 0
     lda #((^PSG_CHANNEL) | $10)  ; Bank with auto-increment
-    sta VERA_ADDR_BANK
+    sta VERA_ADDR_BANK 
     lda #>PSG_CHANNEL         ; High byte
-    sta VERA_ADDR_HIGH
+    sta VERA_ADDR_HIGH 
     lda #<PSG_CHANNEL         ; Low byte
-    sta VERA_ADDR_LOW
+    sta VERA_ADDR_LOW 
     
     ; Set initial sound parameters
     lda sfx_frequency         ; Set frequency (low byte)
-    sta VERA_DATA0
-    lda sfx_frequency+1       ; Set frequency (high byte)
-    sta VERA_DATA0
-    lda sfx_volume+1          ; Set volume with left and right enabled
+    sta VERA_DATA0 
+    lda sfx_frequency + 1     ; Set frequency (high byte)
+    sta VERA_DATA0 
+    lda sfx_volume + 1        ; Set volume with left and right enabled
     ora #%11000000
-    sta VERA_DATA0
+    sta VERA_DATA0 
     lda sfx_waveform          ; Set waveform
-    sta VERA_DATA0
+    sta VERA_DATA0 
 @done_irq:  
     jmp @exit
 
@@ -226,11 +226,11 @@ soundfx_play_irq:
     ; Release complete, turn off sound
     stz VERA_CTRL              ; Select data port 0
     lda #((^PSG_VOLUME) | $00) ; Bank without auto-increment
-    sta VERA_ADDR_BANK
+    sta VERA_ADDR_BANK 
     lda #>PSG_VOLUME           ; High byte
-    sta VERA_ADDR_HIGH
+    sta VERA_ADDR_HIGH 
     lda #<PSG_VOLUME           ; Low byte
-    sta VERA_ADDR_LOW
+    sta VERA_ADDR_LOW 
     
     stz VERA_DATA0             ; Set volume to 0
     stz sfx_phase              ; Mark as not playing
@@ -238,38 +238,38 @@ soundfx_play_irq:
 
 @continue_release:
     ; Update volume (16-bit subtraction)
-    sec
-    lda sfx_volume
-    sbc sfx_vol_change
-    sta sfx_volume
-    lda sfx_volume+1
-    sbc sfx_vol_change+1
-    sta sfx_volume+1
+    sec 
+    lda sfx_volume 
+    sbc sfx_vol_change 
+    sta sfx_volume 
+    lda sfx_volume + 1 
+    sbc sfx_vol_change + 1
+    sta sfx_volume + 1
     
     ; Update frequency (16-bit subtraction)
-    sec
-    lda sfx_frequency
-    sbc sfx_freq_change
-    sta sfx_frequency
-    lda sfx_frequency+1
-    sbc sfx_freq_change+1
-    sta sfx_frequency+1
+    sec 
+    lda sfx_frequency 
+    sbc sfx_freq_change 
+    sta sfx_frequency 
+    lda sfx_frequency + 1
+    sbc sfx_freq_change + 1
+    sta sfx_frequency + 1
     
     ; Update PSG channel
     stz VERA_CTRL              ; Select data port 0
     lda #((^PSG_CHANNEL) | $10) ; Bank with auto-increment
-    sta VERA_ADDR_BANK
+    sta VERA_ADDR_BANK 
     lda #>PSG_CHANNEL          ; High byte
-    sta VERA_ADDR_HIGH
+    sta VERA_ADDR_HIGH 
     lda #<PSG_CHANNEL          ; Low byte
-    sta VERA_ADDR_LOW
+    sta VERA_ADDR_LOW 
     
     ; Write updated values
     lda sfx_frequency          ; Set frequency (low byte)
     sta VERA_DATA0
-    lda sfx_frequency+1        ; Set frequency (high byte)
+    lda sfx_frequency + 1      ; Set frequency (high byte)
     sta VERA_DATA0
-    lda sfx_volume+1           ; Set volume with left and right enabled
+    lda sfx_volume + 1         ; Set volume with left and right enabled
     ora #%11000000
     sta VERA_DATA0
     
@@ -279,12 +279,12 @@ soundfx_play_irq:
 @exit:
     ; Restore VERA registers
     lda sfx_data_store
-    sta VERA_ADDR_LOW
-    lda sfx_data_store+1
-    sta VERA_ADDR_HIGH
-    lda sfx_data_store+2
-    sta VERA_ADDR_BANK
-    lda sfx_data_store+3
+    sta VERA_ADDR_LOW 
+    lda sfx_data_store + 1
+    sta VERA_ADDR_HIGH 
+    lda sfx_data_store + 2
+    sta VERA_ADDR_BANK 
+    lda sfx_data_store + 3
     sta VERA_CTRL
     
     rts 
