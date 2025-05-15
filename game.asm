@@ -27,6 +27,7 @@
 .include "soundfx.asm"
 .include "music.asm"
 .include "projectiles.asm"
+.include "enemy.asm"
 
 ;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
 ;|       $9F29******* Display Composer (DC_Video) ***********
@@ -178,6 +179,7 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
 @ingame_tick:
     jsr update_player_sprite 
     jsr update_projectiles 
+    jsr enemy_update_loop 
     ;jsr update_ui_sprite 
     ;jsr ui_tick 
     rts 
@@ -214,7 +216,7 @@ irq_scanline_handler:           ; ------- SCAN Line IRQ Handler, multiple scan l
 	rti                         ; exit the IRQ 
 
 movePlayer_tick:                ; Move the sprite by player speed and direction                             
-    MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
+    MACRO_VERA_SET_ADDR sp_att_player , 1
     lda VERA_DATA0              ; skip past the first byte of the sprite attribute
     lda VERA_DATA0              ; skip past the second byte of the sprite attribute
     lda VERA_DATA0              ; Read low byte of X position
@@ -282,7 +284,7 @@ movePlayer_tick:                ; Move the sprite by player speed and direction
 @write_position:                ; Write updated position back to VRAM
     jsr check_boundaries  
 
-    MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
+    MACRO_VERA_SET_ADDR sp_att_player , 1
     lda VERA_DATA0 
     lda VERA_DATA0 
     lda player_sprite_x_l       ; Write low byte of X
@@ -353,7 +355,7 @@ update_player_sprite:
     lda player_sprite_index     ; Get current player frame index
     jsr get_sprite_frame_addr   ; Get sprite frame address  returns address ZP_PTR_1 and ZP_PTR_1+1  
 
-    MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
+    MACRO_VERA_SET_ADDR sp_att_player , 1
     lda ZP_PTR_1                ; Write low byte of sprite frame address
     sta VERA_DATA0 
     lda ZP_PTR_1 + 1            ; Write high byte of sprite frame address
@@ -412,11 +414,13 @@ gameplay_init:
     sta VERA_DATA0 
      
     jsr build_sprite_ui  
+    jsr enemy_init 
     
     stz VERA_CTRL               ; Set DCSEL to 0
     lda #%01110001              ; enable sprites, layer 1, layer 0, and output mode to VGA
     sta VERA_DC_VIDEO 
 
+    
     rts 
 
 ; Start Screen Init ------------------------------------------------------------

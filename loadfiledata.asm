@@ -6,13 +6,14 @@
 .ifndef _LOADFILEDATA_ASM 
 _LOADFILEDATA_ASM = 1
 
+.include "globals.asm"
 .include "x16.inc"
 .include "macros.inc"
 
 filenames:
 tilemap_fn:              .asciiz "tilemap.bin"
 sprites_fn:              .asciiz "sprites.bin"
-spritesmall_fn:              .asciiz "spritesm.bin"
+spritesmall_fn:          .asciiz "spritesm.bin"
 tiles_fn:                .asciiz "tiles.bin"
 startscreen_fn:          .asciiz "cover.bin"
 uimap_fn:                .asciiz "uimap.bin"
