@@ -6,6 +6,7 @@
 *.hex
 *.img
 *.zip
+agents.md
 .~*
 font.txt
 normx.txt

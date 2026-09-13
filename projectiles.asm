@@ -442,7 +442,7 @@ update_projectile_sprite:
     adc #5                      ; Down-left (dir 5)
 @set_sprite_frame:  
     ; A now contains projectile frame index
-    lda #5;
+    
     jsr get_small_sprite_frame_addr ; Get the address for this small sprite
     
     ; Write sprite attributes to VERA

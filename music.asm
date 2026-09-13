@@ -47,6 +47,12 @@ ZSMKIT_BANK      = $05
 ZSMKIT_BANK2     = $06
 ZSMKIT_BANK3     = $07
 
+; ---- Music volume / mute configuration ----
+MUSIC_PRIORITY     = 0          ; ZSMKit priority used for the background song
+MUSIC_ATTEN_MAX    = $3F        ; ZSMKit attenuation: $00 = full vol, $3F = muted
+MUSIC_ATTEN_STEP   = 8          ; attenuation change per volume key press
+MUSIC_START_MUTED  = 0          ; build flag: 1 = music starts muted
+
 ; Music Sound Init ------------------------------------------------------------
 music_init:
     ; Load ZSMKIT into RAM bank 5
@@ -238,6 +244,76 @@ music_init:
 	;ldx #1
 	;jsr zsm_play 
 
+.if MUSIC_START_MUTED
+    jsr music_toggle_mute           ; build flag: start with music muted
+.endif
+
     rts 
+
+; ======================================================================
+; Music mute / volume - wraps ZSMKit zsm_setatten for MUSIC_PRIORITY
+;   attenuation: $00 = full volume .. $3F = fully muted
+; ======================================================================
+music_atten:       .byte 0          ; current attenuation (0..$3F)
+music_saved_atten: .byte 0          ; level remembered while muted
+music_muted:       .byte 0          ; 1 = muted
+
+; ----------------------------------------------------------------------
+; music_set_atten - A = attenuation ($00 full volume .. $3F muted)
+;   ZSMKit code lives in a RAM bank, so select it around the call.
+; ----------------------------------------------------------------------
+music_set_atten:
+    cmp #MUSIC_ATTEN_MAX+1
+    bcc @ok
+    lda #MUSIC_ATTEN_MAX            ; clamp
+@ok:
+    sta music_atten
+
+    lda RAM_BANK                    ; ZSMKit expects its bank selected
+    pha
+    lda #ZSMKIT_BANK
+    sta RAM_BANK
+    ldx #MUSIC_PRIORITY
+    lda music_atten
+    jsr zsm_setatten
+    pla
+    sta RAM_BANK
+    rts
+
+; ----------------------------------------------------------------------
+; music_toggle_mute - flip mute (bound to the 'M' key)
+; ----------------------------------------------------------------------
+music_toggle_mute:
+    lda music_muted
+    bne @unmute
+    lda music_atten                 ; remember current level
+    sta music_saved_atten
+    lda #1
+    sta music_muted
+    lda #MUSIC_ATTEN_MAX
+    jmp music_set_atten
+@unmute:
+    stz music_muted
+    lda music_saved_atten
+    jmp music_set_atten
+
+; ----------------------------------------------------------------------
+; music_volume_up / music_volume_down  (bound to '-' and '+' keys)
+; ----------------------------------------------------------------------
+music_volume_up:
+    lda music_atten
+    sec
+    sbc #MUSIC_ATTEN_STEP           ; louder = less attenuation
+    bcs :+
+    lda #0                          ; don't underflow
+:   jmp music_set_atten
+
+music_volume_down:
+    lda music_atten
+    clc
+    adc #MUSIC_ATTEN_STEP           ; quieter = more attenuation
+    bcc :+
+    lda #MUSIC_ATTEN_MAX            ; don't overflow past mute
+:   jmp music_set_atten
 
     .endif

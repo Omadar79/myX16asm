@@ -3,6 +3,10 @@
 ; Programmer:   Dustin Taub
 ; Description:  enemy movement patterns, updates, and collision detection
 ; ===================================================================
+.ifndef ENEMY_ASM
+ENEMY_ASM = 1
+
+
 
 .include "x16.inc"
 .include "globals.asm"
@@ -35,7 +39,7 @@
 ; Enemy status byte flags and masks
 
 enemies_state:              .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 16 enemies
-enemies_move:               .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00   ;
+enemies_move:               .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  
 enemy_x_pos_l:              .byte $00
 enemy_x_pos_h:              .byte $00
 enemy_y_pos_l:              .byte $00
@@ -46,7 +50,7 @@ ENEMY_ACTIVE_MASK           = %00000001 ; Bit 0: Active flag
 ENEMY_PATTERN_MASK          = %00001110 ; Bits 1-3: Pattern ID (0-7)
 ENEMY_STATE_MASK            = %11110000 ; Bits 4-7: State variable (0-15)
 
-MAX_ENEMIES               = 2 ; 16         ; Maximum number of enemies
+MAX_ENEMIES               = 3 ; 16         ; Maximum number of enemies (matches enemy_init test sprites)
 ; ==================================================================='
 ; enemy_init - Initialize enemy data, currently for testing
 enemy_init:
@@ -107,7 +111,16 @@ enemy_init:
     sta VERA_DATA0 
     lda #%01010011              ; 16x16 , paletter offset 3
     sta VERA_DATA0 
-    ;TODO set a position for each enemy
+
+    ; Mark the test enemies active so update_collisions sees them.
+    ; (enemy_update_loop currently ignores the active flag, but collision does not.)
+    ldx #0
+@activate_loop:
+    lda #0                          ; pattern ID 0
+    jsr activate_enemy              ; sets active bit + resets enemy_hp
+    inx
+    cpx #MAX_ENEMIES
+    bne @activate_loop
     rts 
 
 ; ===================================================================
@@ -143,6 +156,8 @@ enemy_update_loop:
 
 activate_enemy:
     pha                            ; Save pattern ID
+    lda #1
+    sta enemy_hp, x                ; Reset HP on spawn (table defined in collision.asm)
     lda enemies_state , x
     ora #ENEMY_ACTIVE_MASK         ; Set active bit
     sta enemies_state , x
@@ -467,36 +482,7 @@ set_enemy_movement:
 
 
 
-; =================================================================== TEMP PATTERN FUNCTIONS
-pattern_functions:
-    .word pattern_test_all 
-    .word pattern_test_all 
-    .word pattern_test_all 
-    .word pattern_test_all 
-    .word pattern_test_all 
 
-; ===================================================================
-; pattern_straight_down - Make enemy move straight down
-; Input: X = enemy index
-; ===================================================================
-pattern_test_all:
-    ; Only update Y position (vertical movement)
-    lda enemy_y_pos_l; , x
-    clc 
-    adc enemy_speed ;, x            ; Add speed value
-    sta enemy_y_pos_l; , x
-    lda enemy_y_pos_h ;, x
-    adc #0                         ; Handle carry
-    sta enemy_y_pos_h ;, x
-    
-    ; Check if enemy is off-screen - straight down never allows offscreen
- ;   lda #ENEMY_MOVE_NORMAL         ; No special movement flags
-;    jsr check_enemy_offscreen 
-;    bcs @deactivate                ; If offscreen, deactivate
-;    jsr update_enemy_sprite 
 
-    rts 
-;@deactivate:
-;    jsr deactivate_enemy           ; Use standardized deactivation
-;
-;    rts 
+
+.endif ; ENEMY_ASM

@@ -43,6 +43,10 @@ KEY_ESCAPE = $1B                  ; ESC key
 KEY_RETURN = $0D                  ; Return/Enter key
 KEY_UP     = $91                  ; Cursor up
 KEY_DOWN   = $11                  ; Cursor dow
+KEY_M      = $4D                  ; 'M' toggle music mute
+KEY_PLUS   = $2B                  ; '+' music volume up
+KEY_MINUS  = $2D                  ; '-' music volume down
+KEY_Q      = $51                  ; 'Q' quit to main menu (from pause)
 MENU_DELAY_TIME  = 10            ; Frames to wait between menu movements
 
 ; Input state variables
@@ -111,6 +115,8 @@ check_pause_input:
     jsr GETIN                       ; Get keyboard input
     cmp #KEY_ESCAPE                 ; Check if escape key is pressed
     beq @unpause_game               ; If ESC pressed, unpause
+    cmp #KEY_Q                      ; 'Q' quits to the main menu
+    beq @quit_to_menu
     stz player_xy_state             ; fall through to joystick check
     jsr JOYSTICK_SCAN               ; Scan the joystick
     lda #1                          ; joystick 1
@@ -125,12 +131,27 @@ check_pause_input:
     sta joystick_latch              ; save this for next time to see state changes
     lda joystick_state      
     bit #%00010000                  ; Check START button
-    bne @done                       ; start not pressed, exit loop
+    bne @chk_select                 ; start not pressed, check select
     lda joystick_latch              ; button is pressed but is it a new press?  Check the cache latch state
     bit #%00010000                  ; bitwise AND to check for start button (ie A register bit 4 being 0)  
-    beq @done                       ; if not a new press then skip to check select button
+    beq @chk_select                 ; if not a new press then skip to check select button
+    bra @unpause_game
+@chk_select:
+    lda joystick_state
+    bit #%00100000                  ; Check SELECT button
+    bne @done                       ; select not pressed, exit loop
+    lda joystick_latch
+    bit #%00100000                  ; is it a new press?
+    beq @done
+    bra @quit_to_menu               ; SELECT quits to the main menu
+
 @unpause_game:
     lda #GAME_STATE_IN_GAME         ; Set game state to in-game
+    jsr request_state_change        ; Use the new transition system
+    bra @done
+
+@quit_to_menu:
+    lda #GAME_STATE_START_SCREEN    ; Return to the title screen
     jsr request_state_change        ; Use the new transition system
 
 @done:
@@ -150,6 +171,20 @@ process_game_input:
     jsr GETIN                       ; Get keyboard input
     cmp #KEY_ESCAPE                 ; Check if escape key is pressed
     beq @pause_game                 ; If ESC pressed, unpause
+    cmp #KEY_M                      ; 'M' toggles music mute
+    bne @chk_vol_up
+    jsr music_toggle_mute
+    bra @scan_joystick
+@chk_vol_up:
+    cmp #KEY_PLUS                   ; '+' turns music volume up
+    bne @chk_vol_down
+    jsr music_volume_up
+    bra @scan_joystick
+@chk_vol_down:
+    cmp #KEY_MINUS                  ; '-' turns music volume down
+    bne @scan_joystick
+    jsr music_volume_down
+@scan_joystick:
     jsr JOYSTICK_SCAN               ; Scan the joystick
     lda #1                          ; joystick 1
     jsr JOYSTICK_GET                ; check the first joystick 
@@ -256,7 +291,7 @@ process_game_input:
     sta ZP_PTR_2 + 1
     bra @standard_shot 
     ; Determine firing direction based on player's sprite frame or joystick
-    ;jsr convert_movement_to_direction    ; Get player facing direction based on input or animation
+    jsr convert_movement_to_direction    ; Get player facing direction based on input or animation
     
     ; Handle spread shot - fire 3 projectiles in a fan pattern
     ;ldx player_weapon_type 

@@ -36,7 +36,7 @@ sp_att_enemyproj =      $1FD08  ; 20x
                                 ; $1FF38 /$1FF40 /$1FF48 /$1FF50 /$1FF58 /$1FF60 /$1FF68 /$1FF70 /$1FF78 /$1FF80
 
 
-                                ; 5x
+sp_att_effects =        $1FF88  ; 5x (explosions, see effects.asm)
                                 ; $1FF88 /$1FF90 /$1FF98 /$1FFA0 /$1FFA8 
 
 sp_att_ui =             $1FFB0  ; 10x
@@ -74,6 +74,28 @@ get_small_sprite_frame_addr:
     lda #>(VRAM_SMALL_SPRITES >> 5)
     adc #0                      ; Add carry from low byte addition
     sta ZP_PTR_1 + 1            ; Store high byte of result
+    rts 
+
+; ===================================================================
+; clear_all_sprites - disable every sprite by zeroing the whole
+;                     attribute table (128 sprites x 8 bytes)
+; ===================================================================
+clear_all_sprites:
+    phx 
+    phy 
+    MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR, 1
+    ldx #4                      ; 4 pages x 256 bytes = 1024 bytes
+    lda #0
+@page:
+    ldy #0
+@byte:
+    sta VERA_DATA0 
+    iny 
+    bne @byte
+    dex 
+    bne @page
+    ply 
+    plx 
     rts 
 
 ; ===================================================================

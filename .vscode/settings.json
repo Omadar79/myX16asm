@@ -1,33 +1,38 @@
 {
+     
+    "files.associations":
+    {
+        "*.inc": "asm"
+    },
     "editor.tokenColorCustomizations":
      {
         "[*]": {
             "textMateRules": [  
                 {
-                    "scope": "constant.numeric.hex",
-                    "settings": {
-                        "foreground": "#df9542ef" 
-                    }
-                },
-                {
                     "scope": "constant.numeric.binary",
                     "settings": {
-                        "foreground": "#e6d64cef" 
+                        "foreground": "#6365D9" 
+                    }
+                }, 
+                {
+                    "scope": "constant.numeric.hex",
+                    "settings": {
+                        "foreground": "#FFA35C" 
                     }
                 },
                 {
                     "scope": "constant.numeric.decimal",
                     "settings": {
-                        "foreground": "#d84155ef" 
+                        "foreground": "#6365D9" 
                     }
-                },              
+                },
                 {
                     "scope": "keyword",
                     "settings": {
                         "foreground": "#b9c7bf" 
                     }
                 },
-        
+         
                 {
                     "scope": "keyword.ca65",  //CA65 specific keywords
                     "settings": {
@@ -38,12 +43,12 @@
                 {
                     "scope": "keyword.control",  //if, else, etc.
                     "settings": {
-                        "foreground": "#0993ca" 
+                        "foreground": "#FF3D5D" 
                     }
                 },
     
                 {
-                    "scope": "support.type",  //Most of the ASM commands (lda, sta, etc.)
+                    "scope": "keyword.instructions",  //Most of the ASM commands (lda, sta, etc.)
                     "settings": {
                         "foreground": "#3ee771" 
                     }
@@ -75,23 +80,24 @@
                 },
                
                 {
-                    "scope": "entity.other.attribute-name",   //label names
+                    "scope": "emphasis",   //label names
                     "settings": {
                         "foreground": "#ac8456"
                     }
                 },
                 {
-                    "scope": "variable.macro",
+                    "scope": "keyword.type",
                     "settings": {
                         "foreground": "#d4fc46d3" 
                     }
                 },
                 {
-                    "scope": "comment",
+                    "scope": "comment.line",
                     "settings": {
                     "foreground": "#37b32ca9" // Bright green for comments in dark themes
                     }
                 },
+
 
             ]
         }
@@ -108,5 +114,27 @@
     },
     "editor.bracketPairColorization.enabled": true,
     "editor.guides.bracketPairs": true,
-    "editor.semanticHighlighting.enabled": true
+    "editor.semanticHighlighting.enabled": true,
+
+    "terminal.integrated.profiles.windows": {
+        "Cygwin": {
+            "path": "C:\\cygwin64\\bin\\bash.exe",
+            "args": ["-l"],
+        }
+    },
+    "terminal.integrated.defaultProfile.windows": "Cygwin",
+
+    
+    "files.exclude": {
+        "**/_Archive": true,
+        "**/_Tests": true,
+        "**/_Tools": true,
+    },
+    "search.exclude": {
+        "**/_Archive": true,
+        "**/_Tests": true,
+        "**/_Tools": true
+    }
+
+}   
 }

@@ -24,6 +24,10 @@ LAYERCONFIG_64X324BPP       = %00010010     ; 64x32 | Text/Tile Mode | T256 0 | 
 LAYERCONFIG_BITMP4BPP       = %00000110     ; 00 00 | T256 0 | BMP 1 | Color 4bpp 10
 LAYERCONFIG_TEXT1BPP        = %00000000     ; 32x32 | T256 0 | BMP 0 | Color 1pp 00
 LAYERCONFIG_64X32UI         = %00010000     ; 64x32 | T256 0 | BMP 0 | Color 1pp 00
+LAYERCONFIG_TEXT64X32       = %00010000     ; 64x32 | T256 0 | BMP 0 | Color 1bpp
+                                            ; NOTE: must be >=40 tiles wide for the
+                                            ; 320x240 (40 column) screen, else the map
+                                            ; wraps and mirrors cols 0-7 at the right edge
 
 SCREEN_MIN_Y_L              = $05
 SCREEN_MIN_Y_H              = $00

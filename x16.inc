@@ -46,14 +46,14 @@ VERA_L1_HSCROLL_L = $9F37
 VERA_L1_HSCROLL_H = $9F38
 VERA_L1_VSCROLL_L = $9F39
 VERA_L1_VSCROLL_H = $9F3A
-VERA_AUDIO_CTRL  = $9F3B
+VERA_AUDIO_CTRL   = $9F3B
 VERA_AUDIO_RATE   = $9F3C
 VERA_AUDIO_DATA   = $9F3D
 VERA_SPI_DATA     = $9F3E
 VERA_SPI_CTRL     = $9F3F
 
 ROM_BANK          = $01
-RAM_BANK           = $00
+RAM_BANK          = $00
 
 YM_REG            = $9F40
 YM_DATA           = $9F41
@@ -69,9 +69,9 @@ CHARSET_ROM_BANK  = 6
 
 
 ; Banked Addresses
-RAM_WIN           = $A000
-RAM_WIN_SIZE      = $2000
-ROM_WIN           = $C000
+RAM_WIN                 = $A000
+RAM_WIN_SIZE            = $2000
+ROM_WIN                 = $C000
 
 ; Kernal Subroutines
 ENTROPY_GET             := $FECF
@@ -180,18 +180,17 @@ BASIC_INIT              := $C003
 
 
 ; IRQ Vectors
-IRQVEC         := $0314
-BRKVEC         := $0316
-NMIVEC         := $0318
-FETVEC         := $03AF
+NMIVEC                  := $0318
+BRKVEC                  := $0316
+IRQVEC                  := $0314
+FETVEC                  := $03AF
 
 
 ;Zero-Page userspace
-ZP_PTR_1          = $7E	
-ZP_PTR_2          = $22
-ZP_PTR_3          = $24
-ZP_PTR_4          = $26
-
+ZP_PTR_1                = $7E	
+ZP_PTR_2                = $22
+ZP_PTR_3                = $24
+ZP_PTR_4                = $26
 
 ; Game Asset Location - VRAM Addresses
 

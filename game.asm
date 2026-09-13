@@ -24,10 +24,15 @@
 .include "globals.asm"
 .include "sprite.asm"
 .include "input.asm"
+.include "projectiles.asm"
 .include "soundfx.asm"
 .include "music.asm"
-.include "projectiles.asm"
 .include "enemy.asm"
+.include "collision.asm"
+.include "effects.asm"
+;.include "enemypatterns.asm"
+
+
 
 ;||||||||||||||||||||||||||||||||||| REFERENCES - VERA  |||||||||||||||||||||||
 ;|       $9F29******* Display Composer (DC_Video) ***********
@@ -180,6 +185,8 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
     jsr update_player_sprite 
     jsr update_projectiles 
     jsr enemy_update_loop 
+    jsr update_collisions 
+    jsr update_explosions       ; animate explosions spawned this frame
     ;jsr update_ui_sprite 
     ;jsr ui_tick 
     rts 
@@ -415,6 +422,8 @@ gameplay_init:
      
     jsr build_sprite_ui  
     jsr enemy_init 
+    jsr init_projectiles  
+    jsr init_explosions         ; clear the explosion sprite slots
     
     stz VERA_CTRL               ; Set DCSEL to 0
     lda #%01110001              ; enable sprites, layer 1, layer 0, and output mode to VGA
@@ -434,6 +443,19 @@ startscreen_init:
     ; initial joystick state: Start & Select pressed
     lda #$CF
     sta joystick_latch 
+
+    ; clear leftover gameplay sprites (enemies/projectiles/effects)
+    jsr clear_all_sprites
+
+    ; reset the menu cursor sprite to the top item
+    lda #99
+    sta player_sprite_x_l
+    stz player_sprite_x_h
+    lda #132
+    sta player_sprite_y_l
+    stz player_sprite_y_h
+    stz player_sprite_index
+
      ; configure sprite for selection menu
     MACRO_VERA_SET_ADDR VRAM_SPRITE_ATTR , 1
     lda #< (VRAM_SPRITES >> 5)
@@ -466,21 +488,25 @@ pause_init:
     ; First, clear the text layer to remove any garbage
     MACRO_VERA_SET_ADDR VRAM_TEXTMAP, 1
     
-    ; Clear 2048 bytes (32x32 characters x 2 bytes per character)
+    ; Clear 4096 bytes (64x32 characters x 2 bytes per character).
+    ; NOTE: the inner loop writes 2 bytes per iteration x 256 = 512 bytes per
+    ; outer pass, so 8 passes = 4096 bytes. Do NOT raise this: a 9th pass would
+    ; run past $0CFFF into VRAM_TILEMAP at $0D000 and corrupt the game map.
     ldy #0                      ; Low byte counter
-    ldx #8                      ; 8 pages of 256 bytes each (32x32x2 = 2048)
+    ldx #8                      ; 8 passes x 512 bytes = 4096 bytes
 @clear_loop:
     lda #$20                    ; Space character
     sta VERA_DATA0 
     lda #1                      ; White text on black background
     sta VERA_DATA0 
     iny                         ; Next byte
-    bne @clear_loop             ; Continue until Y wraps (256 bytes)
-    dex                         ; Next page
-    bne @clear_loop             ; Continue until all pages cleared
+    bne @clear_loop             ; 256 iterations x 2 bytes = 512 bytes
+    dex                         ; Next 512-byte block
+    bne @clear_loop             ; Continue until all blocks cleared
     
-    ; Configure layer 1 for text mode
-    lda #LAYERCONFIG_TEXT1BPP   ; 1bpp text mode
+    ; Configure layer 1 for text mode. The map MUST be >= 40 tiles wide for the
+    ; 320x240 screen, otherwise VERA wraps it and mirrors cols 0-7 at the right.
+    lda #LAYERCONFIG_TEXT64X32  ; 64x32, 1bpp text
     sta VERA_L1_CONFIG 
     lda #(VRAM_TEXTMAP >> 9)    ; Set map base address
     sta VERA_L1_MAPBASE 
@@ -496,10 +522,10 @@ pause_init:
     lda #%00110001              ; disable sprites, layer 1, layer 0, and output mode to VGA ; 
     sta VERA_DC_VIDEO 
     
-    ; Each character position = row*64 + column*2
-    ; Position for "PAUSED" = (15*64) + (13*2) = 960 + 26 = 986
+    ; Each character position = row*128 + column*2 (64-column map)
+    ; Centred for the 40-column display: "PAUSED" = row 12, col 17
     
-    MACRO_VERA_SET_ADDR (VRAM_TEXTMAP + ((12*64) + (16*2)) ), 1
+    MACRO_VERA_SET_ADDR (VRAM_TEXTMAP + ((12*128) + (17*2)) ), 1
 
     ; Write each character manually in uppercase which is more reliable
     lda #$10 ;P
@@ -512,7 +538,7 @@ pause_init:
     lda #71                      ; White color
     sta VERA_DATA0 
     
-     lda #$15 ;U
+    lda #$15 ;U
     sta VERA_DATA0 
     lda #71                      ; White color
     sta VERA_DATA0 
@@ -531,7 +557,43 @@ pause_init:
     sta VERA_DATA0 
     lda #71                      ; White color
     sta VERA_DATA0 
+
+    ; ---- hint line 1: "ESC OR START TO RESUME" (row 14, col 9) ----
+    MACRO_VERA_SET_ADDR (VRAM_TEXTMAP + ((14*128) + (9*2)) ), 1
+    ldx #0
+@resume_loop:
+    lda pause_resume_hint, x
+    beq @quit_hint
+    sta VERA_DATA0 
+    lda #71                      ; White color
+    sta VERA_DATA0 
+    inx 
+    bra @resume_loop
+
+    ; ---- hint line 2: "Q OR SELECT TO QUIT" (row 16, col 10) ----
+@quit_hint:
+    MACRO_VERA_SET_ADDR (VRAM_TEXTMAP + ((16*128) + (10*2)) ), 1
+    ldx #0
+@quit_loop:
+    lda pause_quit_hint, x
+    beq @hint_done
+    sta VERA_DATA0 
+    lda #71                      ; White color
+    sta VERA_DATA0 
+    inx 
+    bra @quit_loop
+@hint_done:
     rts 
+
+; PETSCII screen codes (A=1..Z=$1A, space=$20), 0-terminated
+pause_resume_hint:
+    .byte $05,$13,$03,$20,$0F,$12,$20,$13,$14,$01,$12,$14,$20
+    .byte $14,$0F,$20,$12,$05,$13,$15,$0D,$05              ; "ESC OR START TO RESUME"
+    .byte $00
+pause_quit_hint:
+    .byte $11,$20,$0F,$12,$20,$13,$05,$0C,$05,$03,$14
+    .byte $20,$14,$0F,$20,$11,$15,$09,$14                  ; "Q OR SELECT TO QUIT"
+    .byte $00
 
 ; Unpause Screen ------------------------------------------------------------
 unpause:   
