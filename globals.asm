@@ -40,6 +40,10 @@ SCREEN_MAX_X_H              = $01
 SPACE_DELAY                 = 16           ; Parallax Scrolling
 SPRITE_SIZE                 = 16 * 16 / 2  ; 4bpp 16x16 sprite
 
+;-------- PLAYER DAMAGE --------
+PLAYER_START_LIVES          = 3            ; ships per game
+PLAYER_INVULN_FRAMES        = 120          ; 2 seconds at 60fps
+
 ;-------- GAME STATES --------
 GAME_STATE_LOADING          = $00
 GAME_STATE_START_SCREEN     = $01
@@ -76,6 +80,8 @@ player_sprite_y_h:          .byte 0    ; High byte of Y position, don't really u
 player_speed_x:             .byte 2
 player_speed_y:             .byte 2
 player_sprite_index:        .byte 0    ; sprite index in VERA
+player_lives:               .byte PLAYER_START_LIVES  ; ships remaining
+player_invuln:              .byte 0    ; frames of post-hit invulnerability left
 ui_sprite_index:            .byte $0B    ; sprite index in VERA
 default_irq_vector:         .addr 0
 

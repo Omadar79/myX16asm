@@ -185,7 +185,9 @@ game_tick_loop:                 ;-------  game tick fires every 60th of a second
     jsr update_player_sprite 
     jsr update_projectiles 
     jsr enemy_update_loop 
-    jsr update_collisions 
+    jsr update_collisions
+    jsr update_player_enemy_collisions   ; ship vs enemy
+    jsr update_player_blink              ; respawn blink (Z byte only) 
     jsr update_explosions       ; animate explosions spawned this frame
     ;jsr update_ui_sprite 
     ;jsr ui_tick 
@@ -424,6 +426,7 @@ gameplay_init:
     jsr enemy_init 
     jsr init_projectiles  
     jsr init_explosions         ; clear the explosion sprite slots
+    jsr player_reset            ; 3 lives, no invulnerability
     
     stz VERA_CTRL               ; Set DCSEL to 0
     lda #%01110001              ; enable sprites, layer 1, layer 0, and output mode to VGA
@@ -446,6 +449,7 @@ startscreen_init:
 
     ; clear leftover gameplay sprites (enemies/projectiles/effects)
     jsr clear_all_sprites
+    stz player_invuln           ; no respawn blink on the title screen
 
     ; reset the menu cursor sprite to the top item
     lda #99
