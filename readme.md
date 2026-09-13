@@ -23,7 +23,7 @@ Everything is assembled into a single program from `game.asm`, which `.include`s
 
 #### Core / Engine
 
-- **`game.asm`**: The program entry point. Loads all the assets at boot (`start_game`), installs the custom IRQ handler, and drives the whole game from the 60 Hz VERA vsync tick (`game_tick_loop`). Contains the game-state machine (start screen / in-game / paused), the state-transition system, player movement and sprite updates, and the per-screen setup routines (`gameplay_init`, `startscreen_init`, `pause_init`).
+- **`game.asm`**: The program entry point. Loads all the assets at boot (`start_game`), sets up the custom IRQ handler, and drives the game from the 60 Hz VERA vsync tick (`game_tick_loop`). Contains the game-state machine (start screen / in-game / paused), the state-transition system, player movement and sprite updates, and the per-screen setup routines (`gameplay_init`, `startscreen_init`, `pause_init`).
 - **`globals.asm`**: Shared constants and variables; zero-page assignments, screen boundaries, VERA layer configurations, game-state IDs, player/sprite state, and the on-screen text strings.
 - **`macros.inc`**: Assembler macros. `MACRO_VERA_SET_ADDR` points a VERA data port at a VRAM address with a given stride; `MACRO_SETLFS` sets up a KERNAL logical file.
 - **`x16.inc`**: Hardware definitions for the Commander X16; VERA registers and VRAM addresses, IRQ vectors, RAM/ROM bank registers, and KERNAL jump-table entries.
