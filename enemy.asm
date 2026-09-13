@@ -45,12 +45,28 @@ enemy_x_pos_h:              .byte $00
 enemy_y_pos_l:              .byte $00
 enemy_y_pos_h:              .byte $00
 
-enemy_speed                 = $02       ; Speed of enemy movement (2 pixels per frame)
+ENEMY_SPEED_DEFAULT         = $02       ; Default downward speed (pixels per frame)
 ENEMY_ACTIVE_MASK           = %00000001 ; Bit 0: Active flag
 ENEMY_PATTERN_MASK          = %00001110 ; Bits 1-3: Pattern ID (0-7)
 ENEMY_STATE_MASK            = %11110000 ; Bits 4-7: State variable (0-15)
 
 MAX_ENEMIES               = 3 ; 16         ; Maximum number of enemies (matches enemy_init test sprites)
+
+; ------------------------------ Per-enemy pattern state ----------------------------------
+; Indexed by enemy index; used by the movement pattern routines.
+enemy_angle:        .res MAX_ENEMIES, 0     ; phase for sine / circle (0-255)
+enemy_direction:    .res MAX_ENEMIES, 0     ; direction flag (zigzag bounce, swoop)
+enemy_counter:      .res MAX_ENEMIES, 0     ; generic timer / counter
+enemy_base_x_l:     .res MAX_ENEMIES, 0     ; circle centre X
+enemy_base_x_h:     .res MAX_ENEMIES, 0
+enemy_base_y_l:     .res MAX_ENEMIES, 0     ; circle centre Y
+enemy_base_y_h:     .res MAX_ENEMIES, 0
+enemy_speed_x:      .res MAX_ENEMIES, 0     ; per-enemy horizontal speed
+enemy_speed_y:      .res MAX_ENEMIES, 0     ; per-enemy vertical speed
+
+; -------------------------------- Pattern dispatch ---------------------------------------
+enemy_index:        .byte 0                 ; enemy index held across a pattern call
+pattern_vector:     .word 0                 ; indirect call target (see enemy_update_loop)
 ; ==================================================================='
 ; enemy_init - Initialize enemy data, currently for testing
 enemy_init:
@@ -112,12 +128,16 @@ enemy_init:
     lda #%01010011              ; 16x16 , paletter offset 3
     sta VERA_DATA0 
 
-    ; Mark the test enemies active so update_collisions sees them.
-    ; (enemy_update_loop currently ignores the active flag, but collision does not.)
+    ; Mark the test enemies active and give each a different fall speed so the
+    ; per-enemy pattern state is visibly working.
     ldx #0
 @activate_loop:
-    lda #0                          ; pattern ID 0
-    jsr activate_enemy              ; sets active bit + resets enemy_hp
+    lda #0                          ; pattern ID 0 (straight down)
+    jsr activate_enemy              ; sets active bit + resets enemy_hp/state
+    txa 
+    clc 
+    adc #1                          ; speeds 1, 2, 3
+    sta enemy_speed_y, x
     inx
     cpx #MAX_ENEMIES
     bne @activate_loop
@@ -130,21 +150,25 @@ enemy_init:
 enemy_update_loop:
     ldx #0
 @loop:
-    jsr get_sprite_position             ; Get the sprite position for this enemy index
-    
-    lda enemy_y_pos_l; , x
-    clc 
-    adc enemy_speed ;, x            ; Add speed value
-    sta enemy_y_pos_l; , x
-    lda enemy_y_pos_h ;, x
-    adc #0                         ; Handle carry
-    sta enemy_y_pos_h ;, x
+    lda enemies_state, x
+    and #ENEMY_ACTIVE_MASK
+    beq @skip                       ; inactive -> skip this enemy
 
-    jsr set_sprite_position 
-    ;lda enemies_state , x           
-    ;and #ENEMY_ACTIVE_MASK              ; Check if enemy is active
-;    beq @skip                           ; Skip if inactive
-;    bra @enemy_update                   ; Update enemy movement
+    stx enemy_index                 ; pattern code uses X, so keep it safe
+    jsr get_sprite_position         ; VERA -> enemy_x/y_pos scalars (X preserved)
+
+    ldx enemy_index
+    jsr get_enemy_pattern           ; A = pattern ID (0-7)
+    asl                             ; 2 bytes per table entry
+    tay
+    lda pattern_functions, y
+    sta pattern_vector
+    lda pattern_functions + 1, y
+    sta pattern_vector + 1
+
+    jsr run_pattern                 ; jsr here + jmp (vector) => the pattern's rts lands here
+    ldx enemy_index
+    jsr set_sprite_position         ; write updated position back to VERA
 
 @skip:
     inx 
@@ -158,6 +182,12 @@ activate_enemy:
     pha                            ; Save pattern ID
     lda #1
     sta enemy_hp, x                ; Reset HP on spawn (table defined in collision.asm)
+    lda #ENEMY_SPEED_DEFAULT
+    sta enemy_speed_y, x           ; default downward speed
+    stz enemy_speed_x, x
+    stz enemy_angle, x
+    stz enemy_direction, x
+    stz enemy_counter, x
     lda enemies_state , x
     ora #ENEMY_ACTIVE_MASK         ; Set active bit
     sta enemies_state , x
@@ -484,5 +514,104 @@ set_enemy_movement:
 
 
 
+
+; ===================================================================
+; run_pattern - indirect call through pattern_vector
+;   enemy_update_loop does "jsr run_pattern", which pushes a return
+;   address, then jmp (pattern_vector) enters the pattern routine. The
+;   pattern's rts therefore returns to the instruction after that jsr.
+; ===================================================================
+run_pattern:
+    jmp (pattern_vector)
+
+; ===================================================================
+; deactivate_enemy - clear the active bit and hide the sprite
+; Input: X = enemy index
+; ===================================================================
+deactivate_enemy:
+    lda enemies_state, x
+    and #%11111110                  ; clear ENEMY_ACTIVE_MASK
+    sta enemies_state, x
+    jsr hide_enemy_sprite
+    rts 
+
+; ===================================================================
+; hide_enemy_sprite - zero the sprite Z-depth byte (offset 6) to hide it
+; Input: X = enemy index
+; ===================================================================
+hide_enemy_sprite:
+    txa 
+    asl 
+    asl 
+    asl 
+    clc 
+    adc #<sp_att_enemy
+    sta ZP_PTR_3
+    lda #>sp_att_enemy
+    adc #0
+    sta ZP_PTR_3+1
+
+    lda ZP_PTR_3+1
+    sta VERA_ADDR_HIGH              ; A8-A15
+    lda ZP_PTR_3
+    clc 
+    adc #6                          ; Z-depth byte
+    sta VERA_ADDR_LOW
+    lda #%00010001                  ; auto-inc 1, bank 1
+    sta VERA_ADDR_BANK
+    stz VERA_DATA0
+    rts 
+
+; ===================================================================
+; check_enemy_offscreen - deactivate once the enemy leaves the play field
+;   Enemies move downward, so a Y high byte of 1+ means it is past the
+;   bottom (or wrapped above the top). Called by pattern routines.
+; Input: X = enemy index, position in the enemy_y_pos scalars
+; Output: carry set if the enemy was deactivated
+; ===================================================================
+check_enemy_offscreen:
+    lda enemy_y_pos_h
+    bne @offscreen                  ; y >= 256, or wrapped negative
+    lda enemy_y_pos_l
+    cmp #SCREEN_MAX_Y_L             ; bottom of the play field (224)
+    bcs @offscreen
+    clc 
+    rts 
+@offscreen:
+    jsr deactivate_enemy
+    sec 
+    rts 
+
+; ===================================================================
+; Pattern dispatch table - one .word per pattern ID.
+; A pattern ID is 3 bits (0-7) and enemy_update_loop indexes with ID*2,
+; so keep all 8 entries present even if some are placeholders.
+; ===================================================================
+pattern_functions:
+    .word pattern_straight_down     ; 0 straight down
+    .word pattern_straight_down     ; 1 TODO sine wave
+    .word pattern_straight_down     ; 2 TODO circle
+    .word pattern_straight_down     ; 3 TODO zigzag
+    .word pattern_straight_down     ; 4 TODO swoop
+    .word pattern_straight_down     ; 5 unused
+    .word pattern_straight_down     ; 6 unused
+    .word pattern_straight_down     ; 7 unused
+
+; ===================================================================
+; pattern_straight_down - fall straight down at this enemy's own speed
+; Input: X = enemy index, position in the enemy_x/y_pos scalars
+; Preserves: X
+; ===================================================================
+pattern_straight_down:
+    lda enemy_y_pos_l
+    clc 
+    adc enemy_speed_y, x
+    sta enemy_y_pos_l
+    lda enemy_y_pos_h
+    adc #0
+    sta enemy_y_pos_h
+
+    jsr check_enemy_offscreen
+    rts 
 
 .endif ; ENEMY_ASM

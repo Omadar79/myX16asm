@@ -78,6 +78,20 @@ player_speed_y:             .byte 2
 player_sprite_index:        .byte 0    ; sprite index in VERA
 ui_sprite_index:            .byte $0B    ; sprite index in VERA
 default_irq_vector:         .addr 0
+
+;------------------------------- Screen Text Strings ---------------------------------------------
+; PETSCII screen codes (A=1..Z=$1A, space=$20), 0-terminated. Drawn by pause_init.
+pause_title:
+    .byte $10,$01,$15,$13,$05,$04               ; "PAUSED"
+    .byte $00
+pause_resume_hint:
+    .byte $05,$13,$03,$20,$0F,$12,$20,$13,$14,$01,$12,$14,$20
+    .byte $14,$0F,$20,$12,$05,$13,$15,$0D,$05   ; "ESC OR START TO RESUME"
+    .byte $00
+pause_quit_hint:
+    .byte $11,$20,$0F,$12,$20,$13,$05,$0C,$05,$03,$14
+    .byte $20,$14,$0F,$20,$11,$15,$09,$14       ; "Q OR SELECT TO QUIT"
+    .byte $00
     
 ;---------------------------------End of Variables -----------------------------------------------
 

@@ -8,9 +8,9 @@
 _COLLISION_ASM = 1
 
 ; Assumes already defined: enemies_state, ENEMY_ACTIVE_MASK, MAX_ENEMIES,
-; enemy_x_pos_l/h, enemy_y_pos_l/h, get_sprite_position,
+; enemy_x_pos_l/h, enemy_y_pos_l/h, get_sprite_position, deactivate_enemy,
 ; proj_states, PROJ_MAX_COUNT, PROJ_INACTIVE, proj_x_pos_l/h, proj_y_pos_l/h,
-; disable_projectile_sprite, sp_att_enemy, play_sfx_explode
+; disable_projectile_sprite, play_sfx_explode
 
 PROJ_HALF   = 4                     ; 8x8 sprite
 ENEMY_HALF  = 8                     ; 16x16 sprite
@@ -137,47 +137,14 @@ projectile_hit_enemy:
     bne @survived
     jsr spawn_explosion             ; effect at enemy_x/y_pos (clobbers X)
     ldx col_enemy
-    jsr enemy_deactivate
+    jsr deactivate_enemy            ; shared routine in enemy.asm
     sec                             ; carry set = enemy destroyed
     rts
 @survived:
     clc                             ; carry clear = enemy survived
     rts
 
-; ===================================================================
-; enemy_deactivate - X = enemy index
-;   stands in for the commented-out deactivate_enemy in enemy.asm
-; ===================================================================
-enemy_deactivate:
-    lda enemies_state, x
-    and #%11111110                  ; clear ENEMY_ACTIVE_MASK
-    sta enemies_state, x
-    jsr hide_enemy_sprite
-    rts
 
-; X = enemy index -> zero sprite Z-depth byte (hides it)
-hide_enemy_sprite:
-    txa
-    asl
-    asl
-    asl
-    clc
-    adc #<sp_att_enemy
-    sta ZP_PTR_3
-    lda #>sp_att_enemy
-    adc #0
-    sta ZP_PTR_3+1
-
-    lda ZP_PTR_3+1
-    sta VERA_ADDR_HIGH              ; A8-A15
-    lda ZP_PTR_3
-    clc
-    adc #6                          ; Z-depth byte
-    sta VERA_ADDR_LOW
-    lda #%00010001                  ; auto-inc 1, bank 1
-    sta VERA_ADDR_BANK
-    stz VERA_DATA0
-    rts
 
 ; ===================================================================
 ; abs_dx / abs_dy - two's-complement negate if the diff went negative

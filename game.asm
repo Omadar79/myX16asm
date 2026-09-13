@@ -527,38 +527,19 @@ pause_init:
     
     MACRO_VERA_SET_ADDR (VRAM_TEXTMAP + ((12*128) + (17*2)) ), 1
 
-    ; Write each character manually in uppercase which is more reliable
-    lda #$10 ;P
+    ; Print "PAUSED" from a 0-terminated string, same as the hint lines below
+    ldx #0
+@title_loop:
+    lda pause_title, x
+    beq @resume_hint
     sta VERA_DATA0 
     lda #71                      ; White color
     sta VERA_DATA0 
-    
-    lda #$01 ;A
-    sta VERA_DATA0 
-    lda #71                      ; White color
-    sta VERA_DATA0 
-    
-    lda #$15 ;U
-    sta VERA_DATA0 
-    lda #71                      ; White color
-    sta VERA_DATA0 
-    
-     lda #$13 ;S
-    sta VERA_DATA0 
-    lda #71                      ; White color
-    sta VERA_DATA0 
-    
-    lda #$05 ;E
-    sta VERA_DATA0 
-    lda #71                      ; White color
-    sta VERA_DATA0 
-    
-    lda #$04 ;D
-    sta VERA_DATA0 
-    lda #71                      ; White color
-    sta VERA_DATA0 
+    inx 
+    bra @title_loop
 
     ; ---- hint line 1: "ESC OR START TO RESUME" (row 14, col 9) ----
+@resume_hint:
     MACRO_VERA_SET_ADDR (VRAM_TEXTMAP + ((14*128) + (9*2)) ), 1
     ldx #0
 @resume_loop:
@@ -585,15 +566,6 @@ pause_init:
 @hint_done:
     rts 
 
-; PETSCII screen codes (A=1..Z=$1A, space=$20), 0-terminated
-pause_resume_hint:
-    .byte $05,$13,$03,$20,$0F,$12,$20,$13,$14,$01,$12,$14,$20
-    .byte $14,$0F,$20,$12,$05,$13,$15,$0D,$05              ; "ESC OR START TO RESUME"
-    .byte $00
-pause_quit_hint:
-    .byte $11,$20,$0F,$12,$20,$13,$05,$0C,$05,$03,$14
-    .byte $20,$14,$0F,$20,$11,$15,$09,$14                  ; "Q OR SELECT TO QUIT"
-    .byte $00
 
 ; Unpause Screen ------------------------------------------------------------
 unpause:   
